@@ -29,7 +29,7 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.ViewHolder> 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         VoiceModel voice = voiceList.get(position);
-        holder.tvNameSize.setText(voice.getVoiceName());
+        holder.tvNameSize.setText(voice.getVoiceName() + "   |   Size: " + voice.getSize());
         
         holder.btnDownload.setOnClickListener(v -> {
             holder.btnDownload.setEnabled(false);
