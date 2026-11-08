@@ -184,8 +184,8 @@ public class HomeFragment extends Fragment {
             voicesForLang.add("No voices available");
         } else {
             for (VoiceModel v : allDownloadedVoices) {
-                if (v.language.equals(selectedLang)) {
-                    voicesForLang.add(v.voiceName);
+                if (v.getLanguage().equals(selectedLang)) {
+                    voicesForLang.add(v.getVoiceName());
                 }
             }
         }
