@@ -3,54 +3,24 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="16dp"
+    android:gravity="center_horizontal">
 
     <TextView
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="App Settings"
-        android:textSize="24sp"
+        android:text="DhwaniTTS Settings & About"
+        android:textSize="20sp"
         android:textStyle="bold"
         android:layout_marginBottom="24dp" />
 
-    <!-- High Contrast Text Toggle -->
-    <Switch
-        android:id="@+id/switch_high_contrast"
+    <!-- यह वही बटन है जिसकी तलाश AboutActivity कर रही है -->
+    <Button
+        android:id="@+id/btn_contact_developer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:minHeight="48dp"
-        android:text="High Contrast Text"
-        android:layout_marginBottom="16dp" />
-
-    <!-- Install over Wi-Fi only Toggle -->
-    <Switch
-        android:id="@+id/switch_wifi_only"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:minHeight="48dp"
-        android:text="Install over Wi-Fi only"
-        android:layout_marginBottom="16dp" />
-
-    <!-- Dark Mode / Light Theme Toggle -->
-    <Switch
-        android:id="@+id/switch_dark_mode"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:minHeight="48dp"
-        android:text="Dark Mode"
-        android:layout_marginBottom="16dp" />
-
-    <!-- Font Size Dropdown -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Font Size"
-        android:labelFor="@+id/spinner_font_size"
-        android:textStyle="bold" />
-    <Spinner
-        android:id="@+id/spinner_font_size"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:minHeight="48dp" />
+        android:text="Contact Developer (WhatsApp)"
+        android:textAllCaps="false"
+        android:padding="12dp" />
 
 </LinearLayout>
