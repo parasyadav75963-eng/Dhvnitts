@@ -34,7 +34,6 @@ public class LanguageAdapter extends RecyclerView.Adapter<LanguageAdapter.ViewHo
         String lang = languageList.get(position);
         holder.textView.setText(lang);
         
-        // यहाँ सही तरीके से holder.itemView का इस्तेमाल किया गया है
         holder.itemView.setOnClickListener(v -> {
             if (listener != null) {
                 listener.onLanguageClick(lang);
