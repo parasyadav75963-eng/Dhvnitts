@@ -2,7 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.itfb.dhwanitts">
 
-    <!-- इंटरनेट परमिशन ताकि असली फाइलें डाउनलोड हो सकें -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
@@ -15,7 +14,6 @@
         android:theme="@style/Theme.DhwaniTTS"
         android:usesCleartextTraffic="true">
 
-        <!-- WelcomeActivity अब पहली स्क्रीन (Launcher) है -->
         <activity
             android:name=".WelcomeActivity"
             android:exported="true">
@@ -25,12 +23,20 @@
             </intent-filter>
         </activity>
 
-        <!-- MainActivity अब नॉर्मल एक्टिविटी है -->
         <activity android:name=".MainActivity" android:exported="true" />
-        
-        <!-- About और Settings रजिस्टर किया गया ताकि ऐप क्रैश न हो -->
         <activity android:name=".AboutActivity" />
         <activity android:name=".SettingsActivity" />
+
+        <!-- यह एक्टिविटी ऐप को Preferred Engine लिस्ट में दिखाएगी -->
+        <activity
+            android:name=".CheckVoiceDataActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.speech.tts.engine.CHECK_TTS_DATA" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
         <service
             android:name=".TtsService"
