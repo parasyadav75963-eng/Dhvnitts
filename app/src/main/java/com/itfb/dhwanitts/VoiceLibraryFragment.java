@@ -53,7 +53,7 @@ public class VoiceLibraryFragment extends Fragment {
             // जब कोई भाषा पर क्लिक करे, तो उस भाषा की वॉइसेस छांटना
             List<VoiceModel> filteredVoices = new ArrayList<>();
             for (VoiceModel v : allVoicesList) {
-                if (v.language.equals(language)) {
+                if (v.getLanguage().equals(language)) {
                     filteredVoices.add(v);
                 }
             }
