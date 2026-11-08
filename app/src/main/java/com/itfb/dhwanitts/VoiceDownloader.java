@@ -4,21 +4,20 @@ import android.os.Handler;
 import android.os.Looper;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class VoiceDownloader {
-
     public interface DownloadListener {
         void onProgress(int progress);
-        void onComplete(String filePath);
+        void onSuccess();
         void onError(String error);
     }
 
-    // बैकग्राउंड में काम करने के लिए Executor सर्विस
-    private static final ExecutorService executor = Executors.newFixedThreadPool(3);
+    private static final ExecutorService executor = Executors.newSingleThreadExecutor();
     private static final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     public static void downloadVoice(String fileUrl, String destinationPath, DownloadListener listener) {
@@ -28,39 +27,38 @@ public class VoiceDownloader {
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.connect();
 
-                if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
-                    mainHandler.post(() -> listener.onError("Server returned HTTP " + connection.getResponseCode()));
+                int responseCode = connection.getResponseCode();
+                if (responseCode != HttpURLConnection.HTTP_OK) {
+                    // रिस्पॉन्स कोड को पहले एक स्ट्रिंग में सेव कर रहे हैं ताकि Lambda में एरर न आए
+                    final String errorMsg = "Server returned HTTP " + responseCode;
+                    mainHandler.post(() -> listener.onError(errorMsg));
                     return;
                 }
 
                 int fileLength = connection.getContentLength();
                 InputStream input = connection.getInputStream();
-                FileOutputStream output = new FileOutputStream(destinationPath);
+                OutputStream output = new FileOutputStream(destinationPath);
 
                 byte[] data = new byte[4096];
                 long total = 0;
                 int count;
-                
-                // डाउनलोडिंग लूप
                 while ((count = input.read(data)) != -1) {
                     total += count;
                     if (fileLength > 0) {
                         int progress = (int) (total * 100 / fileLength);
-                        // UI को अपडेट करने के लिए प्रोग्रेस भेजना
                         mainHandler.post(() -> listener.onProgress(progress));
                     }
                     output.write(data, 0, count);
                 }
-
                 output.flush();
                 output.close();
                 input.close();
 
-                // डाउनलोड पूरा होने पर UI को बताना
-                mainHandler.post(() -> listener.onComplete(destinationPath));
+                mainHandler.post(() -> listener.onSuccess());
 
             } catch (Exception e) {
-                mainHandler.post(() -> listener.onError(e.getMessage()));
+                final String exMsg = e.getMessage() != null ? e.getMessage() : "Unknown network error";
+                mainHandler.post(() -> listener.onError("Error: " + exMsg));
             }
         });
     }
