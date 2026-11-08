@@ -1,11 +1,11 @@
 package com.itfb.dhwanitts;
 
 public class VoiceModel {
-    String language;
-    String voiceName;
-    String size;
-    String downloadUrl;
-    boolean isDownloaded;
+    private String language;
+    private String voiceName;
+    private String size;
+    private String downloadUrl;
+    private boolean isDownloaded;
 
     public VoiceModel(String language, String voiceName, String size, String downloadUrl, boolean isDownloaded) {
         this.language = language;
@@ -13,5 +13,25 @@ public class VoiceModel {
         this.size = size;
         this.downloadUrl = downloadUrl;
         this.isDownloaded = isDownloaded;
+    }
+
+    public String getLanguage() {
+        return language;
+    }
+
+    public String getVoiceName() {
+        return voiceName;
+    }
+
+    public String getSize() {
+        return size;
+    }
+
+    public String getDownloadUrl() {
+        return downloadUrl;
+    }
+
+    public boolean isDownloaded() {
+        return isDownloaded;
     }
 }
