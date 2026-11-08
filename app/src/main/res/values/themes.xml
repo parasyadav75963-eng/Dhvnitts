@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- आपके ऐप की मुख्य थीम (Material Design) -->
+    <style name="Theme.DhwaniTTS" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <!-- यहाँ हम डिफ़ॉल्ट कलर्स इस्तेमाल कर रहे हैं ताकि कोई नया एरर न आए -->
+    </style>
+</resources>
