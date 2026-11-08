@@ -100,7 +100,7 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.ViewHolder> 
         return voiceList.size();
     }
 
-    public static class ViewHolder extends RecyclerView.Adapter.ViewHolder {
+    public static class ViewHolder extends RecyclerView.ViewHolder {
         TextView tvNameSize, tvDownloadStatus;
         Button btnPreview, btnDownload;
         ProgressBar progressBar;
