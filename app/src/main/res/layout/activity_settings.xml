@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="App Settings"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp" />
+
+    <!-- High Contrast Text Toggle -->
+    <Switch
+        android:id="@+id/switch_high_contrast"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
+        android:text="High Contrast Text"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Install over Wi-Fi only Toggle -->
+    <Switch
+        android:id="@+id/switch_wifi_only"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
+        android:text="Install over Wi-Fi only"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Dark Mode / Light Theme Toggle -->
+    <Switch
+        android:id="@+id/switch_dark_mode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
+        android:text="Dark Mode"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Font Size Dropdown -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Font Size"
+        android:labelFor="@+id/spinner_font_size"
+        android:textStyle="bold" />
+    <Spinner
+        android:id="@+id/spinner_font_size"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp" />
+
+</LinearLayout>

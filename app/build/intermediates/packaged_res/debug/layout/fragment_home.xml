@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp">
+            
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Home"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"/>
+
+            <Button
+                android:id="@+id/btn_clear_settings"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Clear Settings"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                style="?android:attr/borderlessButtonStyle"
+                android:textColor="#D32F2F"
+                android:minHeight="48dp" />
+        </RelativeLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Select Language"
+            android:labelFor="@+id/spinner_language"
+            android:textStyle="bold" />
+        <Spinner
+            android:id="@+id/spinner_language"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Select Voice"
+            android:labelFor="@+id/spinner_voice"
+            android:textStyle="bold" />
+        <Spinner
+            android:id="@+id/spinner_voice"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/tv_speech_rate_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Speech Rate: 50%"
+            android:textStyle="bold" />
+        <SeekBar
+            android:id="@+id/seekbar_speech_rate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:max="100"
+            android:progress="50"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- नया Force Speech Rate टॉगल यहाँ जोड़ा गया है -->
+        <Switch
+            android:id="@+id/switch_force_speech"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Force Speech Rate"
+            android:minHeight="48dp"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/tv_pitch_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Pitch Rate: 50%"
+            android:textStyle="bold" />
+        <SeekBar
+            android:id="@+id/seekbar_pitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:max="100"
+            android:progress="50"
+            android:layout_marginBottom="8dp"/>
+
+        <Switch
+            android:id="@+id/switch_force_pitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Force Pitch Rate"
+            android:minHeight="48dp"
+            android:layout_marginBottom="24dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Number Reading Format"
+            android:labelFor="@+id/spinner_number_reading"
+            android:textStyle="bold" />
+        <Spinner
+            android:id="@+id/spinner_number_reading"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Punctuation"
+            android:labelFor="@+id/spinner_punctuation"
+            android:textStyle="bold" />
+        <Spinner
+            android:id="@+id/spinner_punctuation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginBottom="32dp" />
+
+        <Button
+            android:id="@+id/btn_test"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="Test Voice"
+            android:layout_marginBottom="12dp" />
+
+        <Button
+            android:id="@+id/btn_save_settings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="Save Settings as Default"
+            android:layout_marginBottom="12dp" />
+
+        <Button
+            android:id="@+id/btn_reset"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="Reset to Default"
+            android:layout_marginBottom="24dp" />
+
+    </LinearLayout>
+</ScrollView>

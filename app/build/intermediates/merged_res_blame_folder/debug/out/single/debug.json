@@ -1,0 +1,38 @@
+[
+    {
+        "merged": "com.itfb.dhwanitts.app-merged_res-31:/layout_fragment_home.xml.flat",
+        "source": "com.itfb.dhwanitts.app-main-33:/layout/fragment_home.xml"
+    },
+    {
+        "merged": "com.itfb.dhwanitts.app-merged_res-31:/layout_fragment_voice_library.xml.flat",
+        "source": "com.itfb.dhwanitts.app-main-33:/layout/fragment_voice_library.xml"
+    },
+    {
+        "merged": "com.itfb.dhwanitts.app-merged_res-31:/layout_activity_settings.xml.flat",
+        "source": "com.itfb.dhwanitts.app-main-33:/layout/activity_settings.xml"
+    },
+    {
+        "merged": "com.itfb.dhwanitts.app-merged_res-31:/layout_item_language.xml.flat",
+        "source": "com.itfb.dhwanitts.app-main-33:/layout/item_language.xml"
+    },
+    {
+        "merged": "com.itfb.dhwanitts.app-merged_res-31:/menu_bottom_nav_menu.xml.flat",
+        "source": "com.itfb.dhwanitts.app-main-33:/menu/bottom_nav_menu.xml"
+    },
+    {
+        "merged": "com.itfb.dhwanitts.app-merged_res-31:/layout_activity_main.xml.flat",
+        "source": "com.itfb.dhwanitts.app-main-33:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.itfb.dhwanitts.app-merged_res-31:/layout_item_voice.xml.flat",
+        "source": "com.itfb.dhwanitts.app-main-33:/layout/item_voice.xml"
+    },
+    {
+        "merged": "com.itfb.dhwanitts.app-merged_res-31:/layout_fragment_settings_more.xml.flat",
+        "source": "com.itfb.dhwanitts.app-main-33:/layout/fragment_settings_more.xml"
+    },
+    {
+        "merged": "com.itfb.dhwanitts.app-merged_res-31:/xml_tts_engine.xml.flat",
+        "source": "com.itfb.dhwanitts.app-main-33:/xml/tts_engine.xml"
+    }
+]
