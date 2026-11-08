@@ -1,52 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.itfb.dhwanitts">
-
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
-        android:label="Dhwani TTS by ITFB"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="DhwaniTTS"
         android:supportsRtl="true"
         android:theme="@style/Theme.DhwaniTTS">
 
+        <!-- MainActivity जो ऐप खुलते ही सबसे पहले दिखेगी -->
         <activity
             android:name=".MainActivity"
-            android:exported="true"
-            android:launchMode="singleTask">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
+        <!-- TalkBack के लिए TTS Service का सेटअप -->
         <service
             android:name=".TtsService"
             android:exported="true"
-            android:label="Dhwani TTS by ITFB"
-            android:permission="android.permission.BIND_TEXT_TO_SPEECH">
+            android:permission="android.permission.BIND_TEXT_TO_SPEECH_SERVICE">
             <intent-filter>
                 <action android:name="android.intent.action.TTS_SERVICE" />
-                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
             <meta-data
                 android:name="android.speech.tts"
                 android:resource="@xml/tts_engine" />
         </service>
 
-        <activity android:name=".SettingsActivity" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-            </intent-filter>
-        </activity>
-        
-        <activity android:name=".WelcomeActivity" android:exported="false" />
-        
-        <!-- नई AboutActivity रजिस्टर की गई -->
-        <activity android:name=".AboutActivity" android:exported="false" />
-
     </application>
+
 </manifest>
