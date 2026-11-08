@@ -15,8 +15,9 @@
         android:theme="@style/Theme.DhwaniTTS"
         android:usesCleartextTraffic="true">
 
+        <!-- WelcomeActivity अब पहली स्क्रीन (Launcher) है -->
         <activity
-            android:name=".MainActivity"
+            android:name=".WelcomeActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -24,6 +25,9 @@
             </intent-filter>
         </activity>
 
+        <!-- MainActivity अब नॉर्मल एक्टिविटी है -->
+        <activity android:name=".MainActivity" android:exported="true" />
+        
         <!-- About और Settings रजिस्टर किया गया ताकि ऐप क्रैश न हो -->
         <activity android:name=".AboutActivity" />
         <activity android:name=".SettingsActivity" />
