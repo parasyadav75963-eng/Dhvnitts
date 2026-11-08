@@ -1,33 +1,63 @@
-[
-  {"language": "Hindi", "voiceName": "Aarav", "size": "24 MB", "downloadUrl": ""},
-  {"language": "Hindi", "voiceName": "Kavya", "size": "22 MB", "downloadUrl": ""},
-  {"language": "Hindi", "voiceName": "Kabir", "size": "23 MB", "downloadUrl": ""},
-  {"language": "Hindi", "voiceName": "Meera", "size": "21 MB", "downloadUrl": ""},
-  {"language": "Hindi", "voiceName": "Vedant", "size": "25 MB", "downloadUrl": ""},
-  {"language": "Chhattisgarhi", "voiceName": "Rohan", "size": "20 MB", "downloadUrl": ""},
-  {"language": "Chhattisgarhi", "voiceName": "Maya", "size": "19 MB", "downloadUrl": ""},
-  {"language": "Chhattisgarhi", "voiceName": "Prakash", "size": "21 MB", "downloadUrl": ""},
-  {"language": "Chhattisgarhi", "voiceName": "Chanda", "size": "20 MB", "downloadUrl": ""},
-  {"language": "Chhattisgarhi", "voiceName": "Suraj", "size": "22 MB", "downloadUrl": ""},
-  {"language": "English (India)", "voiceName": "Vikram", "size": "25 MB", "downloadUrl": ""},
-  {"language": "English (India)", "voiceName": "Neha", "size": "24 MB", "downloadUrl": ""},
-  {"language": "English (India)", "voiceName": "Rahul", "size": "23 MB", "downloadUrl": ""},
-  {"language": "English (India)", "voiceName": "Priya", "size": "22 MB", "downloadUrl": ""},
-  {"language": "English (India)", "voiceName": "Amit", "size": "24 MB", "downloadUrl": ""},
-  {"language": "Bengali", "voiceName": "Anik", "size": "23 MB", "downloadUrl": ""},
-  {"language": "Bengali", "voiceName": "Shreya", "size": "21 MB", "downloadUrl": ""},
-  {"language": "Marathi", "voiceName": "Yash", "size": "24 MB", "downloadUrl": ""},
-  {"language": "Marathi", "voiceName": "Swara", "size": "22 MB", "downloadUrl": ""},
-  {"language": "Tamil", "voiceName": "Kavin", "size": "25 MB", "downloadUrl": ""},
-  {"language": "Tamil", "voiceName": "Nila", "size": "23 MB", "downloadUrl": ""},
-  {"language": "Telugu", "voiceName": "Aryan", "size": "24 MB", "downloadUrl": ""},
-  {"language": "Telugu", "voiceName": "Sahithi", "size": "22 MB", "downloadUrl": ""},
-  {"language": "English (US)", "voiceName": "Oliver", "size": "26 MB", "downloadUrl": ""},
-  {"language": "English (US)", "voiceName": "Emma", "size": "24 MB", "downloadUrl": ""},
-  {"language": "English (UK)", "voiceName": "Arthur", "size": "25 MB", "downloadUrl": ""},
-  {"language": "English (UK)", "voiceName": "Charlotte", "size": "23 MB", "downloadUrl": ""},
-  {"language": "Spanish", "voiceName": "Mateo", "size": "24 MB", "downloadUrl": ""},
-  {"language": "Spanish", "voiceName": "Isabella", "size": "22 MB", "downloadUrl": ""},
-  {"language": "Arabic", "voiceName": "Amir", "size": "25 MB", "downloadUrl": ""},
-  {"language": "Arabic", "voiceName": "Fatima", "size": "23 MB", "downloadUrl": ""}
-]
+{
+  "languages": [
+    {
+      "language": "Hindi",
+      "voices": [
+        {"voiceName": "hi_IN-swara-low", "size": "14.5 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/swara/low/hi_IN-swara-low.onnx"},
+        {"voiceName": "hi_IN-ara-medium", "size": "18.2 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/ara/medium/hi_IN-ara-medium.onnx"}
+      ]
+    },
+    {
+      "language": "English (India)",
+      "voices": [
+        {"voiceName": "en_IN-cmu-low", "size": "15.1 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_IN/cmu/low/en_IN-cmu-low.onnx"},
+        {"voiceName": "en_IN-rainbow-medium", "size": "20.4 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_IN/rainbow/medium/en_IN-rainbow-medium.onnx"}
+      ]
+    },
+    {
+      "language": "English (US)",
+      "voices": [
+        {"voiceName": "en_US-amy-low", "size": "13.8 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/low/en_US-amy-low.onnx"},
+        {"voiceName": "en_US-lessac-medium", "size": "19.5 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx"},
+        {"voiceName": "en_US-ryan-high", "size": "24.1 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx"}
+      ]
+    },
+    {
+      "language": "Marathi",
+      "voices": [
+        {"voiceName": "mr_IN-nirmiti-low", "size": "15.0 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/mr/mr_IN/nirmiti/low/mr_IN-nirmiti-low.onnx"}
+      ]
+    },
+    {
+      "language": "Bengali",
+      "voices": [
+        {"voiceName": "bn_IN-trm-medium", "size": "18.6 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/bn/bn_IN/trm/medium/bn_IN-trm-medium.onnx"}
+      ]
+    },
+    {
+      "language": "Tamil",
+      "voices": [
+        {"voiceName": "ta_IN-trm-medium", "size": "17.9 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/ta/ta_IN/trm/medium/ta_IN-trm-medium.onnx"}
+      ]
+    },
+    {
+      "language": "Telugu",
+      "voices": [
+        {"voiceName": "te_IN-trm-medium", "size": "18.3 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/te/te_IN/trm/medium/te_IN-trm-medium.onnx"}
+      ]
+    },
+    {
+      "language": "Arabic",
+      "voices": [
+        {"voiceName": "ar_AE-kareem-medium", "size": "19.1 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/ar/ar_AE/kareem/medium/ar_AE-kareem-medium.onnx"}
+      ]
+    },
+    {
+      "language": "Spanish",
+      "voices": [
+        {"voiceName": "es_ES-carlfm-low", "size": "14.2 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/carlfm/low/es_ES-carlfm-low.onnx"},
+        {"voiceName": "es_ES-sharvard-medium", "size": "19.8 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx"}
+      ]
+    }
+  ]
+}
