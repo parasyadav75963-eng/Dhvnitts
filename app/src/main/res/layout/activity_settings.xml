@@ -14,6 +14,22 @@
         android:textStyle="bold"
         android:layout_marginBottom="24dp" />
 
+    <!-- फॉन्ट साइज़ चयन के लिए Spinner (SettingsActivity के लिए) -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Select Font Size:"
+        android:textSize="16sp"
+        android:layout_marginBottom="8dp" />
+
+    <Spinner
+        android:id="@+id/spinner_font_size"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:padding="8dp" />
+
+    <!-- WhatsApp कांटेक्ट डेवलपर बटन -->
     <Button
         android:id="@+id/btn_contact_developer"
         android:layout_width="match_parent"
