@@ -14,7 +14,17 @@
         android:textStyle="bold"
         android:layout_marginBottom="24dp" />
 
-    <!-- फॉन्ट साइज़ चयन के लिए Spinner (SettingsActivity के लिए) -->
+    <!-- डार्क मोड स्विच -->
+    <Switch
+        android:id="@+id/switch_dark_mode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Dark Mode"
+        android:textSize="16sp"
+        android:layout_marginBottom="16dp"
+        android:padding="8dp" />
+
+    <!-- फॉन्ट साइज़ चयन के लिए Spinner -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
