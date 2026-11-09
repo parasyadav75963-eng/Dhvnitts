@@ -61,20 +61,18 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
         holder.btnPreview.setOnClickListener(v -> {
             if (isDownloaded) {
                 Toast.makeText(context, "Testing " + voice.getVoiceName() + " (Select in TTS Settings to hear)", Toast.LENGTH_LONG).show();
-                // यहाँ C++ Engine का प्ले लॉजिक कनेक्ट होगा (अगर एक्टिव है)
             } else {
                 Toast.makeText(context, "Please download the voice first to preview!", Toast.LENGTH_SHORT).show();
             }
         });
 
-        // Download Logic (Real Network Download)
+        // Download Logic (Now with Redirect Handling)
         holder.btnDownload.setOnClickListener(v -> {
             holder.btnDownload.setEnabled(false);
             holder.btnDownload.setText("Downloading...");
             downloadVoiceFile(context, voice, position);
         });
 
-        // Delete Logic
         holder.btnDelete.setOnClickListener(v -> {
             if (voiceDir.exists()) {
                 for (File child : voiceDir.listFiles()) {
@@ -92,12 +90,20 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
             try {
                 URL url = new URL(voice.getDownloadUrl());
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.connect();
+                connection.setInstanceFollowRedirects(true);
+                
+                // Redirect handling (For GitHub / Hindi voice links)
+                int status = connection.getResponseCode();
+                if (status == HttpURLConnection.HTTP_MOVED_TEMP || 
+                    status == HttpURLConnection.HTTP_MOVED_PERM || 
+                    status == HttpURLConnection.HTTP_SEE_OTHER) {
+                    String newUrl = connection.getHeaderField("Location");
+                    connection = (HttpURLConnection) new URL(newUrl).openConnection();
+                }
 
                 File dir = new File(context.getExternalFilesDir(null), "piper_voices/" + voice.getVoiceName());
                 if (!dir.exists()) dir.mkdirs();
                 
-                // URL से फाइल का नाम निकालना या .tar.gz रखना
                 String fileName = voice.getVoiceName() + "_data.tar.gz"; 
                 File outputFile = new File(dir, fileName);
 
@@ -113,17 +119,16 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
                 output.close();
                 input.close();
 
-                // डाउनलोड पूरा होने पर UI अपडेट करें
                 mainHandler.post(() -> {
                     Toast.makeText(context, "Download Complete: " + voice.getVoiceName(), Toast.LENGTH_SHORT).show();
-                    notifyItemChanged(position); // UI रिफ्रेश (Download की जगह Delete बटन आ जाएगा)
+                    notifyItemChanged(position);
                 });
 
             } catch (Exception e) {
                 e.printStackTrace();
                 mainHandler.post(() -> {
                     Toast.makeText(context, "Download Failed. Check Internet/URL.", Toast.LENGTH_SHORT).show();
-                    notifyItemChanged(position); // फेल होने पर बटन वापस Download सेट करें
+                    notifyItemChanged(position);
                 });
             }
         });
