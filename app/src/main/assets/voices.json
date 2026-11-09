@@ -1,32 +1,34 @@
-[
-  {
-    "language": "Hindi",
-    "voices": [
-      {
-        "voiceName": "Hindi - Priyamvada (Female)",
-        "size": "22.4 MB",
-        "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx"
-      },
-      {
-        "voiceName": "Hindi - Rohan (Male)",
-        "size": "21.8 MB",
-        "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/rohan/medium/hi_IN-rohan-medium.onnx"
-      }
-    ]
-  },
-  {
-    "language": "English (US)",
-    "voices": [
-      {
-        "voiceName": "English (US) - Ryan (High Quality)",
-        "size": "24.5 MB",
-        "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/high/en_US-ryan-high.onnx"
-      },
-      {
-        "voiceName": "English (US) - Ryan (Medium Quality)",
-        "size": "18.7 MB",
-        "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/medium/en_US-ryan-medium.onnx"
-      }
-    ]
-  }
-]
+{
+  "languages": [
+    {
+      "language": "Hindi",
+      "voices": [
+        {
+          "voiceName": "Hindi - Priyamvada (Female)",
+          "size": "22.4 MB",
+          "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx"
+        },
+        {
+          "voiceName": "Hindi - Rohan (Male)",
+          "size": "21.8 MB",
+          "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/rohan/medium/hi_IN-rohan-medium.onnx"
+        }
+      ]
+    },
+    {
+      "language": "English (US)",
+      "voices": [
+        {
+          "voiceName": "English (US) - Ryan (High Quality)",
+          "size": "24.5 MB",
+          "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/high/en_US-ryan-high.onnx"
+        },
+        {
+          "voiceName": "English (US) - Ryan (Medium Quality)",
+          "size": "18.7 MB",
+          "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/medium/en_US-ryan-medium.onnx"
+        }
+      ]
+    }
+  ]
+}
