@@ -1,18 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.itfb.dhwanitts">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:allowBackup="true"
-        android:icon="@drawable/ic_launcher"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@drawable/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.DhwaniTTS"
-        android:usesCleartextTraffic="true">
+        android:theme="@style/Theme.DhwaniTTS">
 
         <activity
             android:name=".WelcomeActivity"
@@ -23,11 +21,10 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".MainActivity" android:exported="true" />
-        <activity android:name=".AboutActivity" />
-        <activity android:name=".SettingsActivity" />
+        <activity
+            android:name=".MainActivity"
+            android:exported="true" />
 
-        <!-- यह एक्टिविटी ऐप को Preferred Engine लिस्ट में दिखाएगी -->
         <activity
             android:name=".CheckVoiceDataActivity"
             android:exported="true"
@@ -38,6 +35,10 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".AboutActivity"
+            android:exported="true" />
+
         <service
             android:name=".TtsService"
             android:exported="true"
@@ -45,10 +46,11 @@
             <intent-filter>
                 <action android:name="android.intent.action.TTS_SERVICE" />
             </intent-filter>
-            <meta-data android:name="android.speech.tts" android:resource="@xml/tts_engine" />
             <meta-data
                 android:name="android.speech.tts"
                 android:resource="@xml/tts_engine" />
         </service>
+
     </application>
+
 </manifest>

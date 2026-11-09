@@ -1,89 +1,32 @@
-{
-  "languages": [
-    {
-      "language": "Hindi",
-      "voices": [
-        {"voiceName": "Hindi - Swara (Low Quality)", "size": "15.2 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/swara/low/hi_IN-swara-low.onnx"}
-      ]
-    },
-    {
-      "language": "English (US)",
-      "voices": [
-        {"voiceName": "English (US) - Ryan (High Quality)", "size": "24.5 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/high/en_US-ryan-high.onnx"},
-        {"voiceName": "English (US) - Ryan (Medium Quality)", "size": "18.7 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/medium/en_US-ryan-medium.onnx"},
-        {"voiceName": "English (US) - Ryan (Low Quality)", "size": "13.9 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/low/en_US-ryan-low.onnx"},
-        {"voiceName": "English (US) - Amy (Low Quality)", "size": "14.1 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/amy/low/en_US-amy-low.onnx"},
-        {"voiceName": "English (US) - Lessac (Medium Quality)", "size": "19.3 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx"},
-        {"voiceName": "English (US) - Lessac (Low Quality)", "size": "13.8 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/low/en_US-lessac-low.onnx"}
-      ]
-    },
-    {
-      "language": "English (UK)",
-      "voices": [
-        {"voiceName": "English (UK) - Alba (Medium Quality)", "size": "21.0 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_GB/alba/medium/en_GB-alba-medium.onnx"},
-        {"voiceName": "English (UK) - Alan (Low Quality)", "size": "16.4 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_GB/alan/low/en_GB-alan-low.onnx"},
-        {"voiceName": "English (UK) - Southern Female (Low Quality)", "size": "15.8 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_GB/semaine/medium/en_GB-semaine-medium.onnx"}
-      ]
-    },
-    {
-      "language": "Marathi",
-      "voices": [
-        {"voiceName": "Marathi - Nirmiti (Low Quality)", "size": "15.0 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/mr/mr_IN/nirmiti/low/mr_IN-nirmiti-low.onnx"}
-      ]
-    },
-    {
-      "language": "Bengali",
-      "voices": [
-        {"voiceName": "Bengali - Trm (Medium Quality)", "size": "18.6 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/bn/bn_IN/trm/medium/bn_IN-trm-medium.onnx"}
-      ]
-    },
-    {
-      "language": "Tamil",
-      "voices": [
-        {"voiceName": "Tamil - Trm (Medium Quality)", "size": "18.1 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ta/ta_IN/trm/medium/ta_IN-trm-medium.onnx"}
-      ]
-    },
-    {
-      "language": "Telugu",
-      "voices": [
-        {"voiceName": "Telugu - Trm (Medium Quality)", "size": "18.3 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/te/te_IN/trm/medium/te_IN-trm-medium.onnx"}
-      ]
-    },
-    {
-      "language": "Gujarati",
-      "voices": [
-        {"voiceName": "Gujarati - Trm (Medium Quality)", "size": "18.4 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/gu/gu_IN/trm/medium/gu_IN-trm-medium.onnx"}
-      ]
-    },
-    {
-      "language": "Arabic",
-      "voices": [
-        {"voiceName": "Arabic - Kareem (Medium Quality)", "size": "19.1 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ar/ar_JO/kareem/medium/ar_JO-kareem-medium.onnx"},
-        {"voiceName": "Arabic - Kareem (Low Quality)", "size": "14.3 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ar/ar_JO/kareem/low/ar_JO-kareem-low.onnx"}
-      ]
-    },
-    {
-      "language": "Spanish",
-      "voices": [
-        {"voiceName": "Spanish - Carlfm (Low Quality)", "size": "14.2 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/es/es_ES/carlfm/low/es_ES-carlfm-low.onnx"},
-        {"voiceName": "Spanish - Sharvard (Medium Quality)", "size": "19.8 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx"},
-        {"voiceName": "Spanish (MX) - Ald (Medium Quality)", "size": "18.5 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/es/es_MX/ald/medium/es_MX-ald-medium.onnx"}
-      ]
-    },
-    {
-      "language": "French",
-      "voices": [
-        {"voiceName": "French - Upmc (Medium Quality)", "size": "19.2 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/fr/fr_FR/upmc/medium/fr_FR-upmc-medium.onnx"},
-        {"voiceName": "French - Siwis (Medium Quality)", "size": "18.7 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx"}
-      ]
-    },
-    {
-      "language": "German",
-      "voices": [
-        {"voiceName": "German - Thorsten (High Quality)", "size": "26.1 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/de/de_DE/thorsten/high/de_DE-thorsten-high.onnx"},
-        {"voiceName": "German - Thorsten (Medium Quality)", "size": "20.1 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx"},
-        {"voiceName": "German - Eva_k (Low Quality)", "size": "15.3 MB", "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/de/de_DE/eva_k/low/de_DE-eva_k-low.onnx"}
-      ]
-    }
-  ]
-}
+[
+  {
+    "language": "Hindi",
+    "voices": [
+      {
+        "voiceName": "Hindi - Priyamvada (Female)",
+        "size": "22.4 MB",
+        "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx"
+      },
+      {
+        "voiceName": "Hindi - Rohan (Male)",
+        "size": "21.8 MB",
+        "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/rohan/medium/hi_IN-rohan-medium.onnx"
+      }
+    ]
+  },
+  {
+    "language": "English (US)",
+    "voices": [
+      {
+        "voiceName": "English (US) - Ryan (High Quality)",
+        "size": "24.5 MB",
+        "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/high/en_US-ryan-high.onnx"
+      },
+      {
+        "voiceName": "English (US) - Ryan (Medium Quality)",
+        "size": "18.7 MB",
+        "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/medium/en_US-ryan-medium.onnx"
+      }
+    ]
+  }
+]
