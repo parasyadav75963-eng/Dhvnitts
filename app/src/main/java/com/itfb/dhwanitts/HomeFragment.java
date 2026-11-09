@@ -136,7 +136,7 @@ public class HomeFragment extends Fragment {
     private void scanDownloadedVoices() {
         allDownloadedVoices.clear();
         downloadedLanguages.clear();
-        File voicesDir = new File(requireContext().getFilesDir(), "voices");
+        File voicesDir = new File(requireContext().getFilesDir(), "piper_voices");
         
         try {
             InputStream is = requireContext().getAssets().open("voices.json");
