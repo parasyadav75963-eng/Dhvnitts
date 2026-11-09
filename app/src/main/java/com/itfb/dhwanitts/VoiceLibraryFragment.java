@@ -19,7 +19,6 @@ public class VoiceLibraryFragment extends Fragment {
     private RecyclerView recyclerView;
     private VoiceAdapter adapter;
     private List<VoiceModel> voiceList;
-    private String selectedLanguage = "";
 
     @Nullable
     @Override
@@ -29,17 +28,14 @@ public class VoiceLibraryFragment extends Fragment {
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         voiceList = new ArrayList<>();
         
-        if (getArguments() != null) {
-            selectedLanguage = getArguments().getString("selected_language", "");
-        }
+        loadAllVoicesFromJson();
         
-        loadVoicesFromJson(selectedLanguage);
         adapter = new VoiceAdapter(voiceList);
         recyclerView.setAdapter(adapter);
         return view;
     }
 
-    private void loadVoicesFromJson(String langFilter) {
+    private void loadAllVoicesFromJson() {
         try {
             InputStream is = requireContext().getAssets().open("voices.json");
             int size = is.available();
@@ -52,19 +48,17 @@ public class VoiceLibraryFragment extends Fragment {
             
             for (int i = 0; i < languagesArray.length(); i++) {
                 JSONObject langObj = languagesArray.getJSONObject(i);
-                if (langObj.getString("language").equals(langFilter)) {
-                    JSONArray voicesArray = langObj.getJSONArray("voices");
-                    for (int j = 0; j < voicesArray.length(); j++) {
-                        JSONObject voiceObj = voicesArray.getJSONObject(j);
-                        voiceList.add(new VoiceModel(
-                            langFilter,
-                            voiceObj.getString("voiceName"),
-                            voiceObj.getString("size"),
-                            voiceObj.getString("downloadUrl"),
-                            false
-                        ));
-                    }
-                    break;
+                String langName = langObj.getString("language");
+                JSONArray voicesArray = langObj.getJSONArray("voices");
+                for (int j = 0; j < voicesArray.length(); j++) {
+                    JSONObject voiceObj = voicesArray.getJSONObject(j);
+                    voiceList.add(new VoiceModel(
+                        langName,
+                        voiceObj.getString("voiceName"),
+                        voiceObj.getString("size"),
+                        voiceObj.getString("downloadUrl"),
+                        false
+                    ));
                 }
             }
         } catch (Exception e) {
