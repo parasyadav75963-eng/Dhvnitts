@@ -98,8 +98,8 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
                 if (engine.initEngine(modelPath, configPath, PiperEngine.setupEspeakData(context))) {
                     byte[] audioData = engine.synthesizeText(text, 1.0f);
                     if (audioData != null && audioData.length > 0) {
-                        int minBuf = AudioTrack.getMinBufferSize(16000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
-                        AudioTrack audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, 16000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, Math.max(minBuf, audioData.length), AudioTrack.MODE_STREAM);
+                        int minBuf = AudioTrack.getMinBufferSize(22050, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
+                        AudioTrack audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, 22050, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, Math.max(minBuf, audioData.length), AudioTrack.MODE_STREAM);
                         audioTrack.play();
                         audioTrack.write(audioData, 0, audioData.length);
                         audioTrack.stop();

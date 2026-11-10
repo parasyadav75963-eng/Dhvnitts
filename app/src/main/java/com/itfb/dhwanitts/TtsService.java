@@ -85,8 +85,8 @@ public class TtsService extends TextToSpeechService {
         boolean forceSpeech = prefs.getBoolean("force_speech", false);
         float speed = forceSpeech ? (prefs.getInt("speech_rate", 50) / 50.0f) : (request.getSpeechRate() / 100.0f);
 
-        // Piper C++ 16000Hz PCM जनरेट करता है
-        callback.start(16000, AudioFormat.ENCODING_PCM_16BIT, 1);
+        // Piper C++ 22050Hz PCM जनरेट करता है
+        callback.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1);
         
         byte[] audioData = piperEngine.synthesizeText(text, speed);
         
