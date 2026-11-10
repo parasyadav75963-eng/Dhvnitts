@@ -27,13 +27,19 @@ public class PiperEngine {
     public PiperEngine() {}
 
     public PiperEngine(Context context) {
-        if (context != null && espeakDataPath.isEmpty()) {
-            File dataDir = new File(context.getFilesDir(), "espeak-ng-data");
-            if (!new File(dataDir, "phontab").exists()) {
-                copyAssetFolder(context.getAssets(), "espeak-ng-data", dataDir.getAbsolutePath());
-            }
-            espeakDataPath = dataDir.getAbsolutePath();
+        if (context != null) {
+            setupEspeakData(context);
         }
+    }
+
+    public static synchronized String setupEspeakData(Context context) {
+        if (context == null) return espeakDataPath;
+        File dataDir = new File(context.getFilesDir(), "espeak-ng-data");
+        if (!new File(dataDir, "phontab").exists()) {
+            copyAssetFolder(context.getAssets(), "espeak-ng-data", dataDir.getAbsolutePath());
+        }
+        espeakDataPath = dataDir.getAbsolutePath();
+        return espeakDataPath;
     }
 
     public boolean initialize(String modelPath, String configPath) {
@@ -65,19 +71,15 @@ public class PiperEngine {
         return synthesize(text, speed);
     }
 
-    public void destroy() {
-        // Session को जीवित रखा गया है ताकि TalkBack और Preview में कभी टकराव न हो
-    }
+    public void destroy() {}
 
-    public void destroyEngine() {
-        // No-op to prevent killing active TalkBack session during preview
-    }
+    public void destroyEngine() {}
 
     public static synchronized native boolean nativeInit(String modelPath, String configPath, String dataPath);
     public static synchronized native byte[] nativeSynthesize(String text, float speed);
     public static synchronized native void nativeDestroy();
 
-    private void copyAssetFolder(AssetManager assetManager, String fromAssetPath, String toPath) {
+    private static void copyAssetFolder(AssetManager assetManager, String fromAssetPath, String toPath) {
         try {
             String[] files = assetManager.list(fromAssetPath);
             if (files == null) return;
@@ -93,7 +95,7 @@ public class PiperEngine {
         } catch (Exception ignored) {}
     }
 
-    private void copyAsset(AssetManager assetManager, String fromAssetPath, String toPath) {
+    private static void copyAsset(AssetManager assetManager, String fromAssetPath, String toPath) {
         try (InputStream in = assetManager.open(fromAssetPath);
              OutputStream out = new FileOutputStream(toPath)) {
             byte[] buffer = new byte[8192];
