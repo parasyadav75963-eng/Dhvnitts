@@ -53,3 +53,37 @@ dependencies {
     // Microsoft's Official ONNX Runtime C/C++ API for Android
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.16.3'
 }
+
+
+// Auto-download libonnxruntime.so for arm64-v8a if missing
+task downloadOnnxRuntime {
+    doLast {
+        File jniDir = file("src/main/jniLibs/arm64-v8a")
+        File soFile = new File(jniDir, "libonnxruntime.so")
+        if (!soFile.exists()) {
+            jniDir.mkdirs()
+            println "Downloading ONNX Runtime for arm64-v8a..."
+            String url = "https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/onnxruntime-android-arm64-v8a-1.16.3.aar"
+            File aarFile = new File(buildDir, "onnxruntime.aar")
+            aarFile.parentFile.mkdirs()
+            new URL(url).withInputStream { i -> aarFile.withOutputStream { it << i } }
+            
+            ant.unzip(src: aarFile, dest: file("$buildDir/onnx_extracted")) {
+                patternset(includes: "jni/arm64-v8a/libonnxruntime.so")
+            }
+            File extractedSo = new File(buildDir, "onnx_extracted/jni/arm64-v8a/libonnxruntime.so")
+            if (extractedSo.exists()) {
+                extractedSo.renameTo(soFile)
+                println "libonnxruntime.so placed successfully at " + soFile.absolutePath
+            } else {
+                println "Failed to extract libonnxruntime.so from AAR!"
+            }
+        }
+    }
+}
+
+tasks.whenTaskAdded { task ->
+    if (task.name.contains("ExternalNativeBuild") || task.name.contains("CompileDebugSources")) {
+        task.dependsOn("downloadOnnxRuntime")
+    }
+}
