@@ -7,57 +7,70 @@ import android.util.Log;
 
 public class PiperAudioPlayer {
     private static final String TAG = "PiperAudioPlayer";
-    private static AudioTrack audioTrack = null;
+    private static AudioTrack currentTrack = null;
 
-    public static void playAudio(byte[] pcmData, int sampleRate) {
+    public static synchronized void playAudio(final byte[] pcmData, final int sampleRate) {
         if (pcmData == null || pcmData.length == 0) {
-            Log.e(TAG, "Audio data is empty, cannot play.");
+            Log.e(TAG, "PCM Data is empty, cannot play preview.");
             return;
         }
 
         stopAudio();
 
-        try {
-            int bufferSize = AudioTrack.getMinBufferSize(
-                    sampleRate,
-                    AudioFormat.CHANNEL_OUT_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT
-            );
+        new Thread(() -> {
+            try {
+                int minBufSize = AudioTrack.getMinBufferSize(
+                        sampleRate,
+                        AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT
+                );
+                int bufferSize = Math.max(minBufSize * 2, 8192);
 
-            if (bufferSize < pcmData.length) {
-                bufferSize = pcmData.length;
+                AudioTrack track = new AudioTrack.Builder()
+                        .setAudioAttributes(new AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build())
+                        .setAudioFormat(new AudioFormat.Builder()
+                                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                                .setSampleRate(sampleRate)
+                                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                                .build())
+                        .setBufferSizeInBytes(bufferSize)
+                        .setTransferMode(AudioTrack.MODE_STREAM)
+                        .build();
+
+                synchronized (PiperAudioPlayer.class) {
+                    currentTrack = track;
+                }
+
+                track.play();
+                int offset = 0;
+                while (offset < pcmData.length && track.getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
+                    int toWrite = Math.min(4096, pcmData.length - offset);
+                    int written = track.write(pcmData, offset, toWrite);
+                    if (written <= 0) break;
+                    offset += written;
+                }
+
+                Thread.sleep(200);
+                track.stop();
+                track.release();
+            } catch (Exception e) {
+                Log.e(TAG, "Preview playback error: " + e.getMessage());
             }
-
-            audioTrack = new AudioTrack.Builder()
-                    .setAudioAttributes(new AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                            .build())
-                    .setAudioFormat(new AudioFormat.Builder()
-                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                            .setSampleRate(sampleRate)
-                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                            .build())
-                    .setBufferSizeInBytes(bufferSize)
-                    .setTransferMode(AudioTrack.MODE_STATIC)
-                    .build();
-
-            audioTrack.write(pcmData, 0, pcmData.length);
-            audioTrack.play();
-            Log.d(TAG, "Playing preview audio of size: " + pcmData.length);
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error playing audio: " + e.getMessage());
-        }
+        }).start();
     }
 
-    public static void stopAudio() {
-        if (audioTrack != null) {
+    public static synchronized void stopAudio() {
+        if (currentTrack != null) {
             try {
-                audioTrack.stop();
-                audioTrack.release();
+                if (currentTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
+                    currentTrack.stop();
+                }
+                currentTrack.release();
             } catch (Exception ignored) {}
-            audioTrack = null;
+            currentTrack = null;
         }
     }
 }

@@ -135,13 +135,8 @@ public class HomeFragment extends Fragment {
                     if (engine.initEngine(modelFile.getAbsolutePath(), configFile.getAbsolutePath(), PiperEngine.setupEspeakData(requireContext()))) {
                         byte[] audioData = engine.synthesizeText(text, speed);
                         if (audioData != null && audioData.length > 0) {
-                            int minBuf = AudioTrack.getMinBufferSize(22050, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
-                            AudioTrack audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, 22050, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, Math.max(minBuf, audioData.length), AudioTrack.MODE_STREAM);
-                            audioTrack.play();
-                            audioTrack.write(audioData, 0, audioData.length);
-                            audioTrack.stop();
-                            audioTrack.release();
-                        } else {
+                        PiperAudioPlayer.playAudio(audioData, 22050);
+                    } else {
                             mainHandler.post(() -> Toast.makeText(getContext(), "Synthesis failed (Audio empty)", Toast.LENGTH_SHORT).show());
                         }
                         engine.destroyEngine();
