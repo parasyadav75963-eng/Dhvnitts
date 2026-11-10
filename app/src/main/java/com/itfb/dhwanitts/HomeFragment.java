@@ -22,11 +22,10 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
-import org.json.JSONArray;
 import org.json.JSONObject;
+import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -42,9 +41,11 @@ public class HomeFragment extends Fragment {
 
     private List<VoiceModel> allDownloadedVoices = new ArrayList<>();
     private List<String> downloadedLanguages = new ArrayList<>();
+    private List<VoiceModel> currentVoicesForLang = new ArrayList<>();
     
     private ArrayAdapter<String> langAdapter;
     private ArrayAdapter<String> voiceAdapter;
+    private List<String> voiceDisplayNames = new ArrayList<>();
     
     private ExecutorService executorService = Executors.newSingleThreadExecutor();
     private Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -87,18 +88,14 @@ public class HomeFragment extends Fragment {
 
         seekbarSpeechRate.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                tvSpeechRate.setText("Speech Rate: " + progress + "%");
-            }
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) { tvSpeechRate.setText("Speech Rate: " + progress + "%"); }
             @Override public void onStartTrackingTouch(SeekBar seekBar) {}
             @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
         seekbarPitch.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                tvPitch.setText("Pitch Rate: " + progress + "%");
-            }
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) { tvPitch.setText("Pitch Rate: " + progress + "%"); }
             @Override public void onStartTrackingTouch(SeekBar seekBar) {}
             @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
@@ -108,50 +105,53 @@ public class HomeFragment extends Fragment {
         btnClear.setOnClickListener(v -> clearSettings());
         
         btnTest.setOnClickListener(v -> {
-            if (allDownloadedVoices.isEmpty()) {
+            int pos = spinnerVoice.getSelectedItemPosition();
+            if (currentVoicesForLang.isEmpty() || pos < 0) {
                 Toast.makeText(getContext(), "Please download a voice first!", Toast.LENGTH_SHORT).show();
-            } else if (spinnerVoice.getSelectedItem() == null || spinnerVoice.getSelectedItem().toString().equals("No voices available")) {
-                Toast.makeText(getContext(), "Please select a valid voice!", Toast.LENGTH_SHORT).show();
             } else {
-                String voiceName = spinnerVoice.getSelectedItem().toString();
+                VoiceModel selectedVoice = currentVoicesForLang.get(pos);
                 float speed = seekbarSpeechRate.getProgress() / 50.0f;
-                Toast.makeText(getContext(), "Playing Piper preview for " + voiceName, Toast.LENGTH_SHORT).show();
-                playRealPreview(voiceName, speed);
+                Toast.makeText(getContext(), "Playing Piper preview...", Toast.LENGTH_SHORT).show();
+                String previewText = "Hello, this is a test preview.";
+                if (selectedVoice.getLanguageName().equalsIgnoreCase("Hindi") || selectedVoice.getLanguageName().equalsIgnoreCase("Nepali")) {
+                    previewText = "नमस्ते, यह ध्वनि टीटीएस की आवाज़ का परीक्षण है।";
+                }
+                playRealPreview(selectedVoice.getKey(), previewText, speed);
             }
         });
 
         return view;
     }
 
-    private void playRealPreview(String voiceName, float speed) {
+    private void playRealPreview(String voiceKey, String text, float speed) {
         executorService.execute(() -> {
             try {
                 File voicesDir = new File(requireContext().getFilesDir(), "voices");
-                File modelFile = new File(voicesDir, voiceName + ".onnx");
-                File configFile = new File(voicesDir, voiceName + ".onnx.json");
+                File modelFile = new File(voicesDir, voiceKey + ".onnx");
+                File configFile = new File(voicesDir, voiceKey + ".onnx.json");
 
                 if (modelFile.exists() && configFile.exists()) {
                     PiperEngine engine = new PiperEngine();
                     if (engine.initEngine(modelFile.getAbsolutePath(), configFile.getAbsolutePath())) {
-                        String text = "This is a test preview for " + voiceName + ". यह आवाज़ का असली प्रीव्यू है।";
                         byte[] audioData = engine.synthesizeText(text, speed);
                         if (audioData != null && audioData.length > 0) {
-                            AudioTrack audioTrack = new AudioTrack(
-                                AudioManager.STREAM_MUSIC, 16000,
-                                AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT,
-                                audioData.length, AudioTrack.MODE_STATIC
-                            );
-                            audioTrack.write(audioData, 0, audioData.length);
+                            int minBuf = AudioTrack.getMinBufferSize(16000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
+                            AudioTrack audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, 16000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, Math.max(minBuf, audioData.length), AudioTrack.MODE_STREAM);
                             audioTrack.play();
+                            audioTrack.write(audioData, 0, audioData.length);
+                            audioTrack.stop();
+                            audioTrack.release();
+                        } else {
+                            mainHandler.post(() -> Toast.makeText(getContext(), "Synthesis failed (Audio empty)", Toast.LENGTH_SHORT).show());
                         }
                         engine.destroyEngine();
+                    } else {
+                        mainHandler.post(() -> Toast.makeText(getContext(), "Engine Init Failed! File corrupt.", Toast.LENGTH_LONG).show());
                     }
                 } else {
-                    mainHandler.post(() -> Toast.makeText(getContext(), "Voice files corrupted! Please delete and redownload.", Toast.LENGTH_SHORT).show());
+                    mainHandler.post(() -> Toast.makeText(getContext(), "Voice files missing! Please redownload.", Toast.LENGTH_SHORT).show());
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            } catch (Exception e) { e.printStackTrace(); }
         });
     }
 
@@ -161,64 +161,66 @@ public class HomeFragment extends Fragment {
         File voicesDir = new File(requireContext().getFilesDir(), "voices");
         
         try {
-            InputStream is = requireContext().getAssets().open("voices.json");
-            byte[] buffer = new byte[is.available()];
-            is.read(buffer);
-            is.close();
+            File cachedJson = new File(requireContext().getFilesDir(), "cached_voices.json");
+            if (!cachedJson.exists()) {
+                downloadedLanguages.add("Open Voice Library to sync");
+                return;
+            }
+
+            BufferedReader br = new BufferedReader(new InputStreamReader(requireContext().openFileInput("cached_voices.json")));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while((line = br.readLine()) != null) sb.append(line);
+            br.close();
+
+            JSONObject root = new JSONObject(sb.toString());
+            File[] downloadedFiles = voicesDir.listFiles((dir, name) -> name.endsWith(".onnx"));
             
-            JSONObject jsonObject = new JSONObject(new String(buffer, StandardCharsets.UTF_8));
-            JSONArray languagesArray = jsonObject.getJSONArray("languages");
-            
-            for (int i = 0; i < languagesArray.length(); i++) {
-                JSONObject langObj = languagesArray.getJSONObject(i);
-                String lang = langObj.getString("language");
-                JSONArray voicesArray = langObj.getJSONArray("voices");
-                
-                for (int j = 0; j < voicesArray.length(); j++) {
-                    JSONObject voiceObj = voicesArray.getJSONObject(j);
-                    String name = voiceObj.getString("voiceName");
-                    
-                    File checkFile = new File(voicesDir, name + ".onnx");
-                    if (checkFile.exists() && checkFile.length() > 50000) {
-                        allDownloadedVoices.add(new VoiceModel(lang, name, "", "", true));
-                        if (!downloadedLanguages.contains(lang)) {
-                            downloadedLanguages.add(lang);
+            if (downloadedFiles != null) {
+                for (File file : downloadedFiles) {
+                    String key = file.getName().replace(".onnx", "");
+                    if (root.has(key)) {
+                        JSONObject voiceObj = root.getJSONObject(key);
+                        String langEnglish = voiceObj.getJSONObject("language").optString("name_english", "Unknown");
+                        String voiceName = voiceObj.optString("name", "Unknown");
+                        String quality = voiceObj.optString("quality", "");
+                        
+                        allDownloadedVoices.add(new VoiceModel(key, langEnglish, "", voiceName, quality, "", "", "", true));
+                        if (!downloadedLanguages.contains(langEnglish)) {
+                            downloadedLanguages.add(langEnglish);
                         }
                     }
                 }
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        } catch (Exception e) { e.printStackTrace(); }
 
-        if (downloadedLanguages.isEmpty()) {
-            downloadedLanguages.add("No downloaded voices");
-        }
+        if (downloadedLanguages.isEmpty()) { downloadedLanguages.add("No downloaded voices"); }
     }
 
     private void setupSpinners() {
         langAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, downloadedLanguages);
         spinnerLanguage.setAdapter(langAdapter);
-
         String[] numReading = {"Default", "Digits", "Words"};
         spinnerNumber.setAdapter(new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, numReading));
-
         String[] punctuation = {"None", "Some", "Most", "All"};
         spinnerPunctuation.setAdapter(new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, punctuation));
     }
 
     private void updateVoiceSpinner(String selectedLang) {
-        List<String> voicesForLang = new ArrayList<>();
-        if (selectedLang.equals("No downloaded voices")) {
-            voicesForLang.add("No voices available");
+        currentVoicesForLang.clear();
+        voiceDisplayNames.clear();
+        
+        if (selectedLang.equals("No downloaded voices") || selectedLang.equals("Open Voice Library to sync")) {
+            voiceDisplayNames.add("No voices available");
         } else {
             for (VoiceModel v : allDownloadedVoices) {
-                if (v.getLanguage().equals(selectedLang)) {
-                    voicesForLang.add(v.getVoiceName());
+                if (v.getLanguageName().equals(selectedLang)) {
+                    currentVoicesForLang.add(v);
+                    voiceDisplayNames.add(v.getVoiceName() + " [" + v.getQuality() + "]");
                 }
             }
         }
-        voiceAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, voicesForLang);
+        voiceAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, voiceDisplayNames);
         spinnerVoice.setAdapter(voiceAdapter);
     }
 
@@ -229,9 +231,11 @@ public class HomeFragment extends Fragment {
         editor.putBoolean("force_pitch", switchForcePitch.isChecked());
         editor.putBoolean("force_speech", switchForceSpeech.isChecked());
         
-        if (spinnerLanguage.getSelectedItem() != null && spinnerVoice.getSelectedItem() != null) {
-            editor.putString("saved_lang", spinnerLanguage.getSelectedItem().toString());
-            editor.putString("saved_voice", spinnerVoice.getSelectedItem().toString());
+        int selectedVoicePos = spinnerVoice.getSelectedItemPosition();
+        if (selectedVoicePos >= 0 && currentVoicesForLang.size() > selectedVoicePos) {
+            VoiceModel selectedVoice = currentVoicesForLang.get(selectedVoicePos);
+            // TTS service ke liye asali model key save kar rahe hain
+            editor.putString("saved_voice_key", selectedVoice.getKey());
         }
         
         editor.putInt("num_pos", spinnerNumber.getSelectedItemPosition());
@@ -243,19 +247,10 @@ public class HomeFragment extends Fragment {
     private void loadSettings() {
         seekbarSpeechRate.setProgress(prefs.getInt("speech_rate", 50));
         seekbarPitch.setProgress(prefs.getInt("pitch_rate", 50));
-        tvSpeechRate.setText("Speech Rate: " + seekbarSpeechRate.getProgress() + "%");
-        tvPitch.setText("Pitch Rate: " + seekbarPitch.getProgress() + "%");
-        
         switchForcePitch.setChecked(prefs.getBoolean("force_pitch", false));
         switchForceSpeech.setChecked(prefs.getBoolean("force_speech", false));
-        
         spinnerNumber.setSelection(prefs.getInt("num_pos", 0));
         spinnerPunctuation.setSelection(prefs.getInt("punc_pos", 0));
-        
-        String savedLang = prefs.getString("saved_lang", "");
-        if (downloadedLanguages.contains(savedLang)) {
-            spinnerLanguage.setSelection(downloadedLanguages.indexOf(savedLang));
-        }
     }
 
     private void resetSettings() {

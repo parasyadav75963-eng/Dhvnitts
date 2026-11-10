@@ -18,10 +18,7 @@ public class TtsService extends TextToSpeechService {
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.d(TAG, "Dhwani TTS Service Created");
-        // सेटिंग्स पढ़ने के लिए SharedPreferences लोड करना
         prefs = getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
-        // C++ इंजन को इनिशियलाइज़ (चालू) करना
         piperEngine = new PiperEngine();
     }
 
@@ -32,8 +29,7 @@ public class TtsService extends TextToSpeechService {
 
     @Override
     protected String[] onGetLanguage() {
-        String savedLang = prefs.getString("saved_lang", "eng");
-        return new String[]{savedLang, "IND", ""};
+        return new String[]{"hin", "IND", ""};
     }
 
     @Override
@@ -44,13 +40,10 @@ public class TtsService extends TextToSpeechService {
     @Override
     protected void onStop() {
         Log.d(TAG, "TalkBack stopped speaking");
-        // जब आप स्क्रीन टच करके TalkBack को चुप कराते हैं, 
-        // तो यहाँ से हम C++ इंजन को भी रुकने का सिग्नल देंगे (भविष्य में)
     }
 
     @Override
     protected void onSynthesizeText(SynthesisRequest request, SynthesisCallback callback) {
-        // 1. TalkBack से टेक्स्ट प्राप्त करना
         CharSequence textCharSequence = request.getCharSequenceText();
         if (TextUtils.isEmpty(textCharSequence)) {
             callback.done();
@@ -58,44 +51,30 @@ public class TtsService extends TextToSpeechService {
         }
         String text = textCharSequence.toString();
 
-        // 2. यूज़र की सेट की गई वॉइस का नाम पता करना
-        String savedVoice = prefs.getString("saved_voice", "");
-        if (savedVoice.isEmpty()) {
-            Log.e(TAG, "No voice selected by user!");
+        // असली Voice Key जो HomeFragment ने सेव की थी (जैसे: hi_IN-swara-medium)
+        String savedVoiceKey = prefs.getString("saved_voice_key", "");
+        if (savedVoiceKey.isEmpty()) {
             callback.error();
             return;
         }
 
-        // 3. डाउनलोड की गई मॉडल फाइल (.onnx) का रास्ता (path) ढूँढना
         File voicesDir = new File(getFilesDir(), "voices");
-        File modelFile = new File(voicesDir, savedVoice + ".onnx");
-        File configFile = new File(voicesDir, savedVoice + ".onnx.json");
+        File modelFile = new File(voicesDir, savedVoiceKey + ".onnx");
+        File configFile = new File(voicesDir, savedVoiceKey + ".onnx.json");
 
-        if (!modelFile.exists()) {
-            Log.e(TAG, "Model file is missing: " + modelFile.getAbsolutePath());
+        if (!modelFile.exists() || !configFile.exists()) {
             callback.error();
             return;
         }
 
-        // 4. C++ इंजन को वह मॉडल फाइल देकर रेडी करना
         piperEngine.initEngine(modelFile.getAbsolutePath(), configFile.getAbsolutePath());
 
-        // 5. स्पीच रेट सेट करना (अगर 'Force Speech' ऑन है तो ऐप की सेटिंग यूज़ होगी, वरना TalkBack की)
         boolean forceSpeech = prefs.getBoolean("force_speech", false);
-        float speed = 1.0f;
-        if (forceSpeech) {
-            speed = prefs.getInt("speech_rate", 50) / 50.0f;
-        } else {
-            speed = request.getSpeechRate() / 100.0f; // TalkBack की डिफ़ॉल्ट स्पीड 100 होती है
-        }
+        float speed = forceSpeech ? (prefs.getInt("speech_rate", 50) / 50.0f) : (request.getSpeechRate() / 100.0f);
 
-        // 6. ऑडियो फॉर्मेट सेट करना (16000 Hz, 16-bit PCM, Mono)
         callback.start(16000, android.media.AudioFormat.ENCODING_PCM_16BIT, 1);
-
-        // 7. C++ (Piper) से टेक्स्ट को आवाज़ (Bytes) में बदलवाना
         byte[] audioData = piperEngine.synthesizeText(text, speed);
         
-        // 8. आवाज़ को टुकड़ों (chunks) में TalkBack को भेजना ताकि वह तुरंत बोलना शुरू कर दे
         if (audioData != null && audioData.length > 0) {
             int maxBufferSize = callback.getMaxBufferSize();
             int offset = 0;
@@ -105,16 +84,12 @@ public class TtsService extends TextToSpeechService {
                 offset += bytesToWrite;
             }
         }
-        
-        // बोलना ख़त्म हुआ
         callback.done();
     }
     
     @Override
     public void onDestroy() {
-        if (piperEngine != null) {
-            piperEngine.destroyEngine(); // मेमोरी साफ़ करना
-        }
+        if (piperEngine != null) piperEngine.destroyEngine();
         super.onDestroy();
     }
 }
