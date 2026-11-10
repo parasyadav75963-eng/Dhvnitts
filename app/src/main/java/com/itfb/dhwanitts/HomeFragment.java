@@ -2,8 +2,12 @@ package com.itfb.dhwanitts;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.media.AudioFormat;
+import android.media.AudioManager;
+import android.media.AudioTrack;
 import android.os.Bundle;
-import android.speech.tts.TextToSpeech;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -25,7 +29,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class HomeFragment extends Fragment {
 
@@ -41,7 +46,8 @@ public class HomeFragment extends Fragment {
     private ArrayAdapter<String> langAdapter;
     private ArrayAdapter<String> voiceAdapter;
     
-    private TextToSpeech testTts;
+    private ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private Handler mainHandler = new Handler(Looper.getMainLooper());
 
     @Nullable
     @Override
@@ -65,12 +71,6 @@ public class HomeFragment extends Fragment {
         Button btnSave = view.findViewById(R.id.btn_save_settings);
         Button btnReset = view.findViewById(R.id.btn_reset);
         Button btnClear = view.findViewById(R.id.btn_clear_settings);
-
-        testTts = new TextToSpeech(getContext(), status -> {
-            if (status == TextToSpeech.SUCCESS) {
-                testTts.setLanguage(new Locale("hi", "IN"));
-            }
-        });
 
         scanDownloadedVoices();
         setupSpinners();
@@ -110,21 +110,49 @@ public class HomeFragment extends Fragment {
         btnTest.setOnClickListener(v -> {
             if (allDownloadedVoices.isEmpty()) {
                 Toast.makeText(getContext(), "Please download a voice first!", Toast.LENGTH_SHORT).show();
+            } else if (spinnerVoice.getSelectedItem() == null || spinnerVoice.getSelectedItem().toString().equals("No voices available")) {
+                Toast.makeText(getContext(), "Please select a valid voice!", Toast.LENGTH_SHORT).show();
             } else {
                 String voiceName = spinnerVoice.getSelectedItem().toString();
-                String textToSpeak = "This is a test preview for " + voiceName + " voice.";
-                
                 float speed = seekbarSpeechRate.getProgress() / 50.0f;
-                float pitch = seekbarPitch.getProgress() / 50.0f;
-                testTts.setSpeechRate(speed);
-                testTts.setPitch(pitch);
-                
-                testTts.speak(textToSpeak, TextToSpeech.QUEUE_FLUSH, null, null);
-                Toast.makeText(getContext(), "Playing preview...", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "Playing Piper preview for " + voiceName, Toast.LENGTH_SHORT).show();
+                playRealPreview(voiceName, speed);
             }
         });
 
         return view;
+    }
+
+    private void playRealPreview(String voiceName, float speed) {
+        executorService.execute(() -> {
+            try {
+                File voicesDir = new File(requireContext().getFilesDir(), "voices");
+                File modelFile = new File(voicesDir, voiceName + ".onnx");
+                File configFile = new File(voicesDir, voiceName + ".onnx.json");
+
+                if (modelFile.exists() && configFile.exists()) {
+                    PiperEngine engine = new PiperEngine();
+                    if (engine.initEngine(modelFile.getAbsolutePath(), configFile.getAbsolutePath())) {
+                        String text = "This is a test preview for " + voiceName + ". यह आवाज़ का असली प्रीव्यू है।";
+                        byte[] audioData = engine.synthesizeText(text, speed);
+                        if (audioData != null && audioData.length > 0) {
+                            AudioTrack audioTrack = new AudioTrack(
+                                AudioManager.STREAM_MUSIC, 16000,
+                                AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT,
+                                audioData.length, AudioTrack.MODE_STATIC
+                            );
+                            audioTrack.write(audioData, 0, audioData.length);
+                            audioTrack.play();
+                        }
+                        engine.destroyEngine();
+                    }
+                } else {
+                    mainHandler.post(() -> Toast.makeText(getContext(), "Voice files corrupted! Please delete and redownload.", Toast.LENGTH_SHORT).show());
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
     }
 
     private void scanDownloadedVoices() {
@@ -151,7 +179,7 @@ public class HomeFragment extends Fragment {
                     String name = voiceObj.getString("voiceName");
                     
                     File checkFile = new File(voicesDir, name + ".onnx");
-                    if (checkFile.exists()) {
+                    if (checkFile.exists() && checkFile.length() > 50000) {
                         allDownloadedVoices.add(new VoiceModel(lang, name, "", "", true));
                         if (!downloadedLanguages.contains(lang)) {
                             downloadedLanguages.add(lang);
@@ -246,14 +274,5 @@ public class HomeFragment extends Fragment {
         prefs.edit().clear().apply();
         resetSettings();
         Toast.makeText(getContext(), "All Settings Cleared!", Toast.LENGTH_SHORT).show();
-    }
-    
-    @Override
-    public void onDestroy() {
-        if (testTts != null) {
-            testTts.stop();
-            testTts.shutdown();
-        }
-        super.onDestroy();
     }
 }

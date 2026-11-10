@@ -44,11 +44,9 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
         VoiceModel voice = voiceList.get(position);
         Context context = holder.itemView.getContext();
 
-        // 1. फिक्स: नाम को दो बार जुड़ने से रोका गया
         holder.tvVoiceName.setText(voice.getVoiceName());
         holder.tvVoiceSize.setText(voice.getSize());
 
-        // 2. फिक्स: सही फोल्डर पाथ (voices) जो HomeFragment और Service से मैच करता है
         File voicesDir = new File(context.getFilesDir(), "voices");
         File modelFile = new File(voicesDir, voice.getVoiceName() + ".onnx");
         File configFile = new File(voicesDir, voice.getVoiceName() + ".onnx.json");
@@ -65,7 +63,6 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
             holder.btnDownload.setEnabled(true);
         }
 
-        // 3. फिक्स: असली C++ प्रीव्यू लॉजिक
         holder.btnPreview.setOnClickListener(v -> {
             if (isDownloaded) {
                 Toast.makeText(context, "Playing preview...", Toast.LENGTH_SHORT).show();
@@ -99,21 +96,16 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
                     byte[] audioData = engine.synthesizeText(text, 1.0f);
                     if (audioData != null && audioData.length > 0) {
                         AudioTrack audioTrack = new AudioTrack(
-                            AudioManager.STREAM_MUSIC,
-                            16000,
-                            AudioFormat.CHANNEL_OUT_MONO,
-                            AudioFormat.ENCODING_PCM_16BIT,
-                            audioData.length,
-                            AudioTrack.MODE_STATIC
+                            AudioManager.STREAM_MUSIC, 16000,
+                            AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT,
+                            audioData.length, AudioTrack.MODE_STATIC
                         );
                         audioTrack.write(audioData, 0, audioData.length);
                         audioTrack.play();
                     }
                     engine.destroyEngine();
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            } catch (Exception e) { e.printStackTrace(); }
         });
     }
 
@@ -126,7 +118,6 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
                 File modelFile = new File(voicesDir, voice.getVoiceName() + ".onnx");
                 File configFile = new File(voicesDir, voice.getVoiceName() + ".onnx.json");
 
-                // 4. फिक्स: .onnx (मॉडल) फाइल और .json (कॉन्फिग) दोनों फाइलों को एक साथ डाउनलोड करना
                 downloadSingleFile(voice.getDownloadUrl(), modelFile);
                 downloadSingleFile(voice.getDownloadUrl() + ".json", configFile);
 
@@ -136,7 +127,6 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
                 });
 
             } catch (Exception e) {
-                e.printStackTrace();
                 mainHandler.post(() -> {
                     Toast.makeText(context, "Download Failed. Check Internet.", Toast.LENGTH_SHORT).show();
                     notifyItemChanged(position);
@@ -147,15 +137,24 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
 
     private void downloadSingleFile(String fileUrl, File outputFile) throws Exception {
         URL url = new URL(fileUrl);
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setInstanceFollowRedirects(true);
-
-        int status = connection.getResponseCode();
-        if (status == HttpURLConnection.HTTP_MOVED_TEMP || 
-            status == HttpURLConnection.HTTP_MOVED_PERM || 
-            status == HttpURLConnection.HTTP_SEE_OTHER) {
-            String newUrl = connection.getHeaderField("Location");
-            connection = (HttpURLConnection) new URL(newUrl).openConnection();
+        HttpURLConnection connection;
+        int redirects = 0;
+        
+        while (true) {
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setInstanceFollowRedirects(false);
+            int status = connection.getResponseCode();
+            
+            if (status == HttpURLConnection.HTTP_MOVED_TEMP || status == HttpURLConnection.HTTP_MOVED_PERM || status == 307 || status == 308 || status == HttpURLConnection.HTTP_SEE_OTHER) {
+                String newUrl = connection.getHeaderField("Location");
+                url = new URL(newUrl);
+                redirects++;
+                if (redirects > 5) throw new Exception("Too many redirects");
+            } else if (status == HttpURLConnection.HTTP_OK) {
+                break;
+            } else {
+                throw new Exception("HTTP Error");
+            }
         }
 
         InputStream input = connection.getInputStream();
@@ -168,12 +167,16 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
         output.flush();
         output.close();
         input.close();
+
+        // 404 HTML फाइल सुरक्षा: अगर फाइल 50KB से छोटी है, तो वह 404 पेज है! उसे डिलीट करें।
+        if (!outputFile.getName().endsWith(".json") && outputFile.length() < 50000) {
+            outputFile.delete();
+            throw new Exception("Invalid model file downloaded (404 HTML)");
+        }
     }
 
     @Override
-    public int getItemCount() {
-        return voiceList.size();
-    }
+    public int getItemCount() { return voiceList.size(); }
 
     public static class VoiceViewHolder extends RecyclerView.ViewHolder {
         TextView tvVoiceName, tvVoiceSize;
