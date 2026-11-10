@@ -1,0 +1,2574 @@
+DHWANITTS FULL PROJECT CODE DUMP
+Generated from: /data/data/com.termux/files/home/SpeechPlusTTS/DhwaniTTS
+Total files: 42
+======================================================================
+
+
+======================================================================
+FILE: .github/workflows/build.yml
+======================================================================
+
+name: Build DhwaniTTS
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build APK with C++ (Real Voice)
+      run: ./gradlew assembleDebug
+
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: DhwaniTTS-RealVoice-APK
+        path: app/build/outputs/apk/debug/app-debug.apk
+
+
+
+======================================================================
+FILE: app/build.gradle
+======================================================================
+
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.itfb.dhwanitts'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.itfb.dhwanitts"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+
+        // C++ सेटिंग्स वापस चालू
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++17"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    // CMake फाइल को लिंक करना
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+}
+
+
+
+======================================================================
+FILE: app/src/main/AndroidManifest.xml
+======================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <application
+        android:allowBackup="true"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.DhwaniTTS">
+
+        <activity
+            android:name=".WelcomeActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true" />
+
+        <activity
+            android:name=".CheckVoiceDataActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.speech.tts.engine.CHECK_TTS_DATA" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".AboutActivity"
+            android:exported="true" />
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="true" />
+
+        <!-- 100% Correct TTS Service Registration -->
+        <service
+            android:name=".TtsService"
+            android:label="Dhwani TTS Engine"
+            android:exported="true"
+            android:permission="android.permission.BIND_TEXT_TO_SPEECH_SERVICE">
+            <intent-filter>
+                <action android:name="android.intent.action.TTS_SERVICE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech.tts"
+                android:resource="@xml/tts_engine" />
+        </service>
+
+    </application>
+</manifest>
+
+
+
+======================================================================
+FILE: app/src/main/assets/voices.json
+======================================================================
+
+{
+  "languages": [
+    {
+      "language": "Hindi",
+      "voices": [
+        {
+          "voiceName": "Hindi - Swara (Female)",
+          "size": "21.5 MB",
+          "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/swara/medium/hi_IN-swara-medium.onnx"
+        },
+        {
+          "voiceName": "Hindi - Amit (Male)",
+          "size": "20.1 MB",
+          "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/hi/hi_IN/amit/medium/hi_IN-amit-medium.onnx"
+        }
+      ]
+    },
+    {
+      "language": "English (US)",
+      "voices": [
+        {
+          "voiceName": "English (US) - Ryan (High Quality)",
+          "size": "24.5 MB",
+          "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/high/en_US-ryan-high.onnx"
+        },
+        {
+          "voiceName": "English (US) - Ryan (Medium Quality)",
+          "size": "18.7 MB",
+          "downloadUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/medium/en_US-ryan-medium.onnx"
+        }
+      ]
+    }
+  ]
+}
+
+
+
+======================================================================
+FILE: app/src/main/cpp/CMakeLists.txt
+======================================================================
+
+cmake_minimum_required(VERSION 3.22.1)
+project("dhwanitts_piper")
+
+# हमारी C++ फाइल को एक शेयर्ड लाइब्रेरी (.so) में बदलना
+add_library(piper_wrapper SHARED piper_wrapper.cpp)
+
+# एंड्रॉइड के लॉग सिस्टम को C++ से जोड़ना (ताकि हम Logcat में एरर देख सकें)
+find_library(log-lib log)
+target_link_libraries(piper_wrapper ${log-lib})
+
+
+
+======================================================================
+FILE: app/src/main/cpp/piper_wrapper.cpp
+======================================================================
+
+#include <jni.h>
+#include <string>
+#include <android/log.h>
+
+#define LOG_TAG "DhwaniTTS_PiperJNI"
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_itfb_dhwanitts_PiperEngine_initEngine(JNIEnv* env, jobject /* this */, jstring modelPath, jstring configPath) {
+    const char* model = env->GetStringUTFChars(modelPath, nullptr);
+    LOGD("Piper Engine Initializing with model: %s", model);
+    
+    // TODO: यहाँ हम असली Piper C++ इंजन और ONNX Runtime को स्टार्ट करेंगे
+    
+    env->ReleaseStringUTFChars(modelPath, model);
+    return JNI_TRUE;
+}
+
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_itfb_dhwanitts_PiperEngine_synthesizeText(JNIEnv* env, jobject /* this */, jstring text, jfloat speed) {
+    const char* nativeText = env->GetStringUTFChars(text, nullptr);
+    LOGD("Synthesizing text: %s", nativeText);
+    
+    // TODO: यहाँ Piper टेक्स्ट को प्रोसेस करेगा और ऑडियो बाइट्स (PCM) बनाएगा
+    // अभी के लिए हम एक खाली बाइट एरे (Byte Array) वापस कर रहे हैं ताकि ऐप क्रैश न हो
+    jbyteArray audioBytes = env->NewByteArray(0); 
+    
+    env->ReleaseStringUTFChars(text, nativeText);
+    return audioBytes;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_itfb_dhwanitts_PiperEngine_destroyEngine(JNIEnv* env, jobject /* this */) {
+    LOGD("Piper Engine Destroyed and memory cleared");
+    // TODO: मेमोरी साफ़ करने का कोड
+}
+
+
+
+======================================================================
+FILE: app/src/main/java/com/itfb/dhwanitts/AboutActivity.java
+======================================================================
+
+package com.itfb.dhwanitts;
+
+import android.os.Bundle;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class AboutActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // यहाँ activity_settings की जगह activity_about सेट कर दिया गया है
+        setContentView(R.layout.activity_about);
+    }
+}
+
+
+
+======================================================================
+FILE: app/src/main/java/com/itfb/dhwanitts/CheckVoiceDataActivity.java
+======================================================================
+
+package com.itfb.dhwanitts;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.os.Bundle;
+import android.speech.tts.TextToSpeech;
+import java.util.ArrayList;
+
+public class CheckVoiceDataActivity extends Activity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        
+        Intent returnData = new Intent();
+        
+        // सिस्टम को बताना कि हमारे पास कौन सी भाषाएं उपलब्ध हैं (उदाहरण)
+        ArrayList<String> availableVoices = new ArrayList<>();
+        availableVoices.add("hi-IN");
+        availableVoices.add("en-US");
+        availableVoices.add("en-GB");
+        
+        returnData.putStringArrayListExtra(TextToSpeech.Engine.EXTRA_AVAILABLE_VOICES, availableVoices);
+        returnData.putStringArrayListExtra(TextToSpeech.Engine.EXTRA_UNAVAILABLE_VOICES, new ArrayList<String>());
+        
+        setResult(TextToSpeech.Engine.CHECK_VOICE_DATA_PASS, returnData);
+        finish();
+    }
+}
+
+
+
+======================================================================
+FILE: app/src/main/java/com/itfb/dhwanitts/HomeFragment.java
+======================================================================
+
+package com.itfb.dhwanitts;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.media.AudioFormat;
+import android.media.AudioManager;
+import android.media.AudioTrack;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.SeekBar;
+import android.widget.Spinner;
+import android.widget.Switch;
+import android.widget.TextView;
+import android.widget.Toast;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import org.json.JSONObject;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class HomeFragment extends Fragment {
+
+    private SharedPreferences prefs;
+    private Spinner spinnerLanguage, spinnerVoice, spinnerNumber, spinnerPunctuation;
+    private SeekBar seekbarSpeechRate, seekbarPitch;
+    private TextView tvSpeechRate, tvPitch;
+    private Switch switchForcePitch, switchForceSpeech;
+
+    private List<VoiceModel> allDownloadedVoices = new ArrayList<>();
+    private List<String> downloadedLanguages = new ArrayList<>();
+    private List<VoiceModel> currentVoicesForLang = new ArrayList<>();
+    
+    private ArrayAdapter<String> langAdapter;
+    private ArrayAdapter<String> voiceAdapter;
+    private List<String> voiceDisplayNames = new ArrayList<>();
+    
+    private ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private Handler mainHandler = new Handler(Looper.getMainLooper());
+
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.fragment_home, container, false);
+        prefs = requireActivity().getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
+
+        spinnerLanguage = view.findViewById(R.id.spinner_language);
+        spinnerVoice = view.findViewById(R.id.spinner_voice);
+        spinnerNumber = view.findViewById(R.id.spinner_number_reading);
+        spinnerPunctuation = view.findViewById(R.id.spinner_punctuation);
+        
+        seekbarSpeechRate = view.findViewById(R.id.seekbar_speech_rate);
+        seekbarPitch = view.findViewById(R.id.seekbar_pitch);
+        tvSpeechRate = view.findViewById(R.id.tv_speech_rate_label);
+        tvPitch = view.findViewById(R.id.tv_pitch_label);
+        switchForcePitch = view.findViewById(R.id.switch_force_pitch);
+        switchForceSpeech = view.findViewById(R.id.switch_force_speech);
+
+        Button btnTest = view.findViewById(R.id.btn_test);
+        Button btnSave = view.findViewById(R.id.btn_save_settings);
+        Button btnReset = view.findViewById(R.id.btn_reset);
+        Button btnClear = view.findViewById(R.id.btn_clear_settings);
+
+        scanDownloadedVoices();
+        setupSpinners();
+
+        spinnerLanguage.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                updateVoiceSpinner(downloadedLanguages.get(position));
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
+        });
+
+        loadSettings();
+
+        seekbarSpeechRate.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) { tvSpeechRate.setText("Speech Rate: " + progress + "%"); }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
+        seekbarPitch.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) { tvPitch.setText("Pitch Rate: " + progress + "%"); }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
+        btnSave.setOnClickListener(v -> saveSettings());
+        btnReset.setOnClickListener(v -> resetSettings());
+        btnClear.setOnClickListener(v -> clearSettings());
+        
+        btnTest.setOnClickListener(v -> {
+            int pos = spinnerVoice.getSelectedItemPosition();
+            if (currentVoicesForLang.isEmpty() || pos < 0) {
+                Toast.makeText(getContext(), "Please download a voice first!", Toast.LENGTH_SHORT).show();
+            } else {
+                VoiceModel selectedVoice = currentVoicesForLang.get(pos);
+                float speed = seekbarSpeechRate.getProgress() / 50.0f;
+                Toast.makeText(getContext(), "Playing Piper preview...", Toast.LENGTH_SHORT).show();
+                String previewText = "Hello, this is a test preview.";
+                if (selectedVoice.getLanguageName().equalsIgnoreCase("Hindi") || selectedVoice.getLanguageName().equalsIgnoreCase("Nepali")) {
+                    previewText = "नमस्ते, यह ध्वनि टीटीएस की आवाज़ का परीक्षण है।";
+                }
+                playRealPreview(selectedVoice.getKey(), previewText, speed);
+            }
+        });
+
+        return view;
+    }
+
+    private void playRealPreview(String voiceKey, String text, float speed) {
+        executorService.execute(() -> {
+            try {
+                File voicesDir = new File(requireContext().getFilesDir(), "voices");
+                File modelFile = new File(voicesDir, voiceKey + ".onnx");
+                File configFile = new File(voicesDir, voiceKey + ".onnx.json");
+
+                if (modelFile.exists() && configFile.exists()) {
+                    PiperEngine engine = new PiperEngine();
+                    if (engine.initEngine(modelFile.getAbsolutePath(), configFile.getAbsolutePath())) {
+                        byte[] audioData = engine.synthesizeText(text, speed);
+                        if (audioData != null && audioData.length > 0) {
+                            int minBuf = AudioTrack.getMinBufferSize(16000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
+                            AudioTrack audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, 16000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, Math.max(minBuf, audioData.length), AudioTrack.MODE_STREAM);
+                            audioTrack.play();
+                            audioTrack.write(audioData, 0, audioData.length);
+                            audioTrack.stop();
+                            audioTrack.release();
+                        } else {
+                            mainHandler.post(() -> Toast.makeText(getContext(), "Synthesis failed (Audio empty)", Toast.LENGTH_SHORT).show());
+                        }
+                        engine.destroyEngine();
+                    } else {
+                        mainHandler.post(() -> Toast.makeText(getContext(), "Engine Init Failed! File corrupt.", Toast.LENGTH_LONG).show());
+                    }
+                } else {
+                    mainHandler.post(() -> Toast.makeText(getContext(), "Voice files missing! Please redownload.", Toast.LENGTH_SHORT).show());
+                }
+            } catch (Exception e) { e.printStackTrace(); }
+        });
+    }
+
+    private void scanDownloadedVoices() {
+        allDownloadedVoices.clear();
+        downloadedLanguages.clear();
+        File voicesDir = new File(requireContext().getFilesDir(), "voices");
+        
+        try {
+            File cachedJson = new File(requireContext().getFilesDir(), "cached_voices.json");
+            if (!cachedJson.exists()) {
+                downloadedLanguages.add("Open Voice Library to sync");
+                return;
+            }
+
+            BufferedReader br = new BufferedReader(new InputStreamReader(requireContext().openFileInput("cached_voices.json")));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while((line = br.readLine()) != null) sb.append(line);
+            br.close();
+
+            JSONObject root = new JSONObject(sb.toString());
+            File[] downloadedFiles = voicesDir.listFiles((dir, name) -> name.endsWith(".onnx"));
+            
+            if (downloadedFiles != null) {
+                for (File file : downloadedFiles) {
+                    String key = file.getName().replace(".onnx", "");
+                    if (root.has(key)) {
+                        JSONObject voiceObj = root.getJSONObject(key);
+                        String langEnglish = voiceObj.getJSONObject("language").optString("name_english", "Unknown");
+                        String voiceName = voiceObj.optString("name", "Unknown");
+                        String quality = voiceObj.optString("quality", "");
+                        
+                        allDownloadedVoices.add(new VoiceModel(key, langEnglish, "", voiceName, quality, "", "", "", true));
+                        if (!downloadedLanguages.contains(langEnglish)) {
+                            downloadedLanguages.add(langEnglish);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+
+        if (downloadedLanguages.isEmpty()) { downloadedLanguages.add("No downloaded voices"); }
+    }
+
+    private void setupSpinners() {
+        langAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, downloadedLanguages);
+        spinnerLanguage.setAdapter(langAdapter);
+        String[] numReading = {"Default", "Digits", "Words"};
+        spinnerNumber.setAdapter(new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, numReading));
+        String[] punctuation = {"None", "Some", "Most", "All"};
+        spinnerPunctuation.setAdapter(new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, punctuation));
+    }
+
+    private void updateVoiceSpinner(String selectedLang) {
+        currentVoicesForLang.clear();
+        voiceDisplayNames.clear();
+        
+        if (selectedLang.equals("No downloaded voices") || selectedLang.equals("Open Voice Library to sync")) {
+            voiceDisplayNames.add("No voices available");
+        } else {
+            for (VoiceModel v : allDownloadedVoices) {
+                if (v.getLanguageName().equals(selectedLang)) {
+                    currentVoicesForLang.add(v);
+                    voiceDisplayNames.add(v.getVoiceName() + " [" + v.getQuality() + "]");
+                }
+            }
+        }
+        voiceAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, voiceDisplayNames);
+        spinnerVoice.setAdapter(voiceAdapter);
+    }
+
+    private void saveSettings() {
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putInt("speech_rate", seekbarSpeechRate.getProgress());
+        editor.putInt("pitch_rate", seekbarPitch.getProgress());
+        editor.putBoolean("force_pitch", switchForcePitch.isChecked());
+        editor.putBoolean("force_speech", switchForceSpeech.isChecked());
+        
+        int selectedVoicePos = spinnerVoice.getSelectedItemPosition();
+        if (selectedVoicePos >= 0 && currentVoicesForLang.size() > selectedVoicePos) {
+            VoiceModel selectedVoice = currentVoicesForLang.get(selectedVoicePos);
+            // TTS service ke liye asali model key save kar rahe hain
+            editor.putString("saved_voice_key", selectedVoice.getKey());
+        }
+        
+        editor.putInt("num_pos", spinnerNumber.getSelectedItemPosition());
+        editor.putInt("punc_pos", spinnerPunctuation.getSelectedItemPosition());
+        editor.apply();
+        Toast.makeText(getContext(), "Settings Saved as Default!", Toast.LENGTH_SHORT).show();
+    }
+
+    private void loadSettings() {
+        seekbarSpeechRate.setProgress(prefs.getInt("speech_rate", 50));
+        seekbarPitch.setProgress(prefs.getInt("pitch_rate", 50));
+        switchForcePitch.setChecked(prefs.getBoolean("force_pitch", false));
+        switchForceSpeech.setChecked(prefs.getBoolean("force_speech", false));
+        spinnerNumber.setSelection(prefs.getInt("num_pos", 0));
+        spinnerPunctuation.setSelection(prefs.getInt("punc_pos", 0));
+    }
+
+    private void resetSettings() {
+        seekbarSpeechRate.setProgress(50);
+        seekbarPitch.setProgress(50);
+        switchForcePitch.setChecked(false);
+        switchForceSpeech.setChecked(false);
+        if (spinnerLanguage.getCount() > 0) spinnerLanguage.setSelection(0);
+        spinnerNumber.setSelection(0);
+        spinnerPunctuation.setSelection(0);
+        saveSettings();
+        Toast.makeText(getContext(), "Reset to Default", Toast.LENGTH_SHORT).show();
+    }
+
+    private void clearSettings() {
+        prefs.edit().clear().apply();
+        resetSettings();
+        Toast.makeText(getContext(), "All Settings Cleared!", Toast.LENGTH_SHORT).show();
+    }
+}
+
+
+
+======================================================================
+FILE: app/src/main/java/com/itfb/dhwanitts/LanguageAdapter.java
+======================================================================
+
+package com.itfb.dhwanitts;
+
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+import java.util.List;
+
+public class LanguageAdapter extends RecyclerView.Adapter<LanguageAdapter.ViewHolder> {
+
+    private List<String> languageList;
+    private OnLanguageClickListener listener;
+
+    public interface OnLanguageClickListener {
+        void onLanguageClick(String lang);
+    }
+
+    public LanguageAdapter(List<String> languageList, OnLanguageClickListener listener) {
+        this.languageList = languageList;
+        this.listener = listener;
+    }
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(parent.getContext()).inflate(android.R.layout.simple_list_item_1, parent, false);
+        return new ViewHolder(view);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        String lang = languageList.get(position);
+        holder.textView.setText(lang);
+        
+        holder.itemView.setOnClickListener(v -> {
+            if (listener != null) {
+                listener.onLanguageClick(lang);
+            }
+        });
+    }
+
+    @Override
+    public int getItemCount() {
+        return languageList != null ? languageList.size() : 0;
+    }
+
+    public static class ViewHolder extends RecyclerView.ViewHolder {
+        TextView textView;
+
+        public ViewHolder(@NonNull View itemView) {
+            super(itemView);
+            textView = itemView.findViewById(android.R.id.text1);
+        }
+    }
+}
+
+
+
+======================================================================
+FILE: app/src/main/java/com/itfb/dhwanitts/MainActivity.java
+======================================================================
+
+package com.itfb.dhwanitts;
+
+import android.os.Bundle;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.Fragment;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+
+public class MainActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        BottomNavigationView bottomNav = findViewById(R.id.bottom_navigation);
+        
+        // टैब बदलने का लॉजिक
+        bottomNav.setOnItemSelectedListener(item -> {
+            Fragment selectedFragment = null;
+            int itemId = item.getItemId();
+            
+            if (itemId == R.id.nav_home) {
+                selectedFragment = new HomeFragment();
+            } else if (itemId == R.id.nav_voice_library) {
+                selectedFragment = new VoiceLibraryFragment();
+            } else if (itemId == R.id.nav_settings) {
+                selectedFragment = new SettingsMoreFragment();
+            }
+            
+            if (selectedFragment != null) {
+                getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.fragment_container, selectedFragment).commit();
+            }
+            return true;
+        });
+
+        // जब ऐप खुले तो सबसे पहले Home टैब दिखाई दे
+        if (savedInstanceState == null) {
+            getSupportFragmentManager().beginTransaction()
+                .replace(R.id.fragment_container, new HomeFragment()).commit();
+        }
+    }
+}
+
+
+
+======================================================================
+FILE: app/src/main/java/com/itfb/dhwanitts/PiperEngine.java
+======================================================================
+
+package com.itfb.dhwanitts;
+
+public class PiperEngine {
+    
+    // जब ऐप खुलेगा, तो यह C++ लाइब्रेरी को मेमोरी में लोड कर लेगा
+    static {
+        System.loadLibrary("piper_wrapper");
+    }
+
+    // ये वो फंक्शन हैं जिनका असली कोड Java में नहीं, बल्कि C++ में लिखा है (native)
+    public native boolean initEngine(String modelPath, String configPath);
+    public native byte[] synthesizeText(String text, float speed);
+    public native void destroyEngine();
+}
+
+
+
+======================================================================
+FILE: app/src/main/java/com/itfb/dhwanitts/SettingsActivity.java
+======================================================================
+
+package com.itfb.dhwanitts;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
+import android.widget.Switch;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
+
+public class SettingsActivity extends AppCompatActivity {
+
+    private SharedPreferences prefs;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_settings);
+
+        prefs = getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
+
+        Switch switchHighContrast = findViewById(R.id.switch_high_contrast);
+        Switch switchWifiOnly = findViewById(R.id.switch_wifi_only);
+        Switch switchDarkMode = findViewById(R.id.switch_dark_mode);
+        Spinner spinnerFontSize = findViewById(R.id.spinner_font_size);
+
+        // फॉन्ट साइज़ ड्रॉपडाउन के लिए विकल्प सेट करना
+        String[] fontSizes = {"Small", "Default", "Large", "Extra Large"};
+        ArrayAdapter<String> fontAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, fontSizes);
+        spinnerFontSize.setAdapter(fontAdapter);
+
+        // पुरानी सेव की गई सेटिंग्स को लोड करना (वाई-फाई ओनली को डिफ़ॉल्ट रूप से 'true' रखा है ताकि डेटा खर्च न हो)
+        switchHighContrast.setChecked(prefs.getBoolean("high_contrast", false));
+        switchWifiOnly.setChecked(prefs.getBoolean("wifi_only", true)); 
+        switchDarkMode.setChecked(prefs.getBoolean("dark_mode", false));
+        spinnerFontSize.setSelection(prefs.getInt("font_size_pos", 1)); // 1 यानी "Default"
+
+        // वाई-फाई ओनली स्विच का लॉजिक
+        switchWifiOnly.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            prefs.edit().putBoolean("wifi_only", isChecked).apply();
+        });
+
+        // हाई कंट्रास्ट स्विच का लॉजिक
+        switchHighContrast.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            prefs.edit().putBoolean("high_contrast", isChecked).apply();
+        });
+
+        // डार्क मोड स्विच का लॉजिक (इसे दबाते ही पूरी ऐप की थीम तुरंत बदल जाएगी)
+        switchDarkMode.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            prefs.edit().putBoolean("dark_mode", isChecked).apply();
+            if (isChecked) {
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
+            } else {
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+            }
+        });
+
+        // फॉन्ट साइज़ सेलेक्ट करने पर उसे सेव करना
+        spinnerFontSize.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                prefs.edit().putInt("font_size_pos", position).apply();
+            }
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+    }
+}
+
+
+
+======================================================================
+FILE: app/src/main/java/com/itfb/dhwanitts/SettingsMoreFragment.java
+======================================================================
+
+package com.itfb.dhwanitts;
+
+import android.content.Intent;
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+
+public class SettingsMoreFragment extends Fragment {
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.fragment_settings_more, container, false);
+
+        Button btnAbout = view.findViewById(R.id.btn_about_itfb);
+        Button btnTtsSettings = view.findViewById(R.id.btn_open_tts_settings);
+        Button btnAppSettings = view.findViewById(R.id.btn_app_settings);
+
+        // About ITFB स्क्रीन खोलना
+        btnAbout.setOnClickListener(v -> {
+            startActivity(new Intent(getActivity(), AboutActivity.class));
+        });
+
+        // App Settings स्क्रीन खोलना
+        btnAppSettings.setOnClickListener(v -> {
+            startActivity(new Intent(getActivity(), SettingsActivity.class));
+        });
+
+        // फ़ोन की डिफ़ॉल्ट TTS सेटिंग खोलना
+        btnTtsSettings.setOnClickListener(v -> {
+            Intent intent = new Intent("com.android.settings.TTS_SETTINGS");
+            try {
+                startActivity(intent);
+            } catch (Exception e) {
+                // अगर किसी फ़ोन में यह शॉर्टकट काम न करे, तो एक्सेसिबिलिटी सेटिंग खोलें
+                startActivity(new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            }
+        });
+
+        return view;
+    }
+}
+
+
+
+======================================================================
+FILE: app/src/main/java/com/itfb/dhwanitts/TtsService.java
+======================================================================
+
+package com.itfb.dhwanitts;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.media.AudioFormat;
+import android.speech.tts.SynthesisCallback;
+import android.speech.tts.SynthesisRequest;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.TextToSpeechService;
+import android.text.TextUtils;
+import android.util.Log;
+import java.io.File;
+
+public class TtsService extends TextToSpeechService {
+    private static final String TAG = "DhwaniTTS_Service";
+    private PiperEngine piperEngine;
+    private SharedPreferences prefs;
+    private String currentLoadedVoiceKey = ""; // मॉडल को बार-बार लोड होने से रोकने के लिए
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        prefs = getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
+        piperEngine = new PiperEngine();
+    }
+
+    @Override
+    protected int onIsLanguageAvailable(String lang, String country, String variant) {
+        return TextToSpeech.LANG_AVAILABLE;
+    }
+
+    @Override
+    protected String[] onGetLanguage() {
+        return new String[]{"hin", "IND", ""};
+    }
+
+    @Override
+    protected int onLoadLanguage(String lang, String country, String variant) {
+        return TextToSpeech.LANG_AVAILABLE;
+    }
+
+    @Override
+    protected void onStop() {
+        Log.d(TAG, "TalkBack stopped speaking");
+        // यहाँ इंजन को डिस्ट्रॉय न करें, वर्ना अगला वाक्य नहीं बोलेगा
+    }
+
+    @Override
+    protected void onSynthesizeText(SynthesisRequest request, SynthesisCallback callback) {
+        CharSequence textCharSequence = request.getCharSequenceText();
+        if (TextUtils.isEmpty(textCharSequence)) {
+            callback.done();
+            return;
+        }
+        String text = textCharSequence.toString();
+
+        String savedVoiceKey = prefs.getString("saved_voice_key", "");
+        if (savedVoiceKey.isEmpty()) {
+            callback.error();
+            return;
+        }
+
+        File voicesDir = new File(getFilesDir(), "voices");
+        File modelFile = new File(voicesDir, savedVoiceKey + ".onnx");
+        File configFile = new File(voicesDir, savedVoiceKey + ".onnx.json");
+
+        if (!modelFile.exists() || !configFile.exists()) {
+            Log.e(TAG, "Model or Config missing!");
+            callback.error();
+            return;
+        }
+
+        // फिक्स: मॉडल केवल तभी लोड होगा जब वॉइस बदली गई हो (TalkBack स्पीड फिक्स)
+        if (!savedVoiceKey.equals(currentLoadedVoiceKey)) {
+            boolean isInit = piperEngine.initEngine(modelFile.getAbsolutePath(), configFile.getAbsolutePath());
+            if (isInit) {
+                currentLoadedVoiceKey = savedVoiceKey;
+            } else {
+                Log.e(TAG, "Piper Engine init failed!");
+                callback.error();
+                return;
+            }
+        }
+
+        boolean forceSpeech = prefs.getBoolean("force_speech", false);
+        float speed = forceSpeech ? (prefs.getInt("speech_rate", 50) / 50.0f) : (request.getSpeechRate() / 100.0f);
+
+        // Piper C++ 16000Hz PCM जनरेट करता है
+        callback.start(16000, AudioFormat.ENCODING_PCM_16BIT, 1);
+        
+        byte[] audioData = piperEngine.synthesizeText(text, speed);
+        
+        if (audioData != null && audioData.length > 0) {
+            int maxBufferSize = callback.getMaxBufferSize();
+            int offset = 0;
+            while (offset < audioData.length) {
+                int bytesToWrite = Math.min(maxBufferSize, audioData.length - offset);
+                callback.audioAvailable(audioData, offset, bytesToWrite);
+                offset += bytesToWrite;
+            }
+            callback.done();
+        } else {
+            Log.e(TAG, "Synthesis failed (Audio empty) - Espeak-ng data might be missing in C++!");
+            callback.error();
+        }
+    }
+    
+    @Override
+    public void onDestroy() {
+        if (piperEngine != null) {
+            piperEngine.destroyEngine();
+            currentLoadedVoiceKey = "";
+        }
+        super.onDestroy();
+    }
+}
+
+
+
+======================================================================
+FILE: app/src/main/java/com/itfb/dhwanitts/VoiceAdapter.java
+======================================================================
+
+package com.itfb.dhwanitts;
+
+import android.content.Context;
+import android.media.AudioFormat;
+import android.media.AudioManager;
+import android.media.AudioTrack;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHolder> {
+    private List<VoiceModel> voiceList;
+    private ExecutorService executorService = Executors.newFixedThreadPool(3);
+    private Handler mainHandler = new Handler(Looper.getMainLooper());
+    private static final String BASE_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/";
+
+    public VoiceAdapter(List<VoiceModel> voiceList) { this.voiceList = voiceList; }
+
+    @NonNull
+    @Override
+    public VoiceViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_voice, parent, false);
+        return new VoiceViewHolder(view);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull VoiceViewHolder holder, int position) {
+        VoiceModel voice = voiceList.get(position);
+        Context context = holder.itemView.getContext();
+
+        String displayName = voice.getLanguageName() + " (" + voice.getCountry() + ") - " + voice.getVoiceName() + " [" + voice.getQuality() + "]";
+        holder.tvVoiceName.setText(displayName);
+        holder.tvVoiceSize.setText(voice.getSizeMB());
+
+        File voicesDir = new File(context.getFilesDir(), "voices");
+        File modelFile = new File(voicesDir, voice.getKey() + ".onnx");
+        File configFile = new File(voicesDir, voice.getKey() + ".onnx.json");
+        
+        boolean isDownloaded = voice.isDownloaded();
+
+        if (isDownloaded) {
+            holder.btnDownload.setVisibility(View.GONE);
+            holder.btnDelete.setVisibility(View.VISIBLE);
+        } else {
+            holder.btnDownload.setVisibility(View.VISIBLE);
+            holder.btnDelete.setVisibility(View.GONE);
+            holder.btnDownload.setText("Download");
+            holder.btnDownload.setEnabled(true);
+        }
+
+        holder.btnPreview.setOnClickListener(v -> {
+            if (isDownloaded) {
+                Toast.makeText(context, "Playing preview...", Toast.LENGTH_SHORT).show();
+                String previewText = "Hello, this is a voice preview from Dhwani TTS.";
+                if (voice.getLanguageName().equalsIgnoreCase("Hindi") || voice.getLanguageName().equalsIgnoreCase("Nepali")) {
+                    previewText = "नमस्ते, यह ध्वनि टीटीएस की आवाज़ का परीक्षण है।";
+                }
+                playRealPreview(modelFile.getAbsolutePath(), configFile.getAbsolutePath(), previewText, context);
+            } else {
+                Toast.makeText(context, "Please download first!", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        holder.btnDownload.setOnClickListener(v -> {
+            holder.btnDownload.setEnabled(false);
+            holder.btnDownload.setText("Downloading...");
+            downloadVoiceFile(context, voice, position);
+        });
+
+        holder.btnDelete.setOnClickListener(v -> {
+            if (modelFile.exists()) modelFile.delete();
+            if (configFile.exists()) configFile.delete();
+            voice.setDownloaded(false);
+            Toast.makeText(context, "Deleted", Toast.LENGTH_SHORT).show();
+            notifyItemChanged(position);
+        });
+    }
+
+    private void playRealPreview(String modelPath, String configPath, String text, Context context) {
+        executorService.execute(() -> {
+            try {
+                PiperEngine engine = new PiperEngine();
+                if (engine.initEngine(modelPath, configPath)) {
+                    byte[] audioData = engine.synthesizeText(text, 1.0f);
+                    if (audioData != null && audioData.length > 0) {
+                        int minBuf = AudioTrack.getMinBufferSize(16000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
+                        AudioTrack audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, 16000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, Math.max(minBuf, audioData.length), AudioTrack.MODE_STREAM);
+                        audioTrack.play();
+                        audioTrack.write(audioData, 0, audioData.length);
+                        audioTrack.stop();
+                        audioTrack.flush(); audioTrack.release();
+                    } else {
+                        mainHandler.post(() -> Toast.makeText(context, "Synthesis failed (Audio empty)", Toast.LENGTH_SHORT).show());
+                    }
+                    engine.destroyEngine();
+                } else {
+                    mainHandler.post(() -> Toast.makeText(context, "Engine Init Failed! File corrupt.", Toast.LENGTH_LONG).show());
+                }
+            } catch (Exception e) { e.printStackTrace(); }
+        });
+    }
+
+    private void downloadVoiceFile(Context context, VoiceModel voice, int position) {
+        executorService.execute(() -> {
+            try {
+                File voicesDir = new File(context.getFilesDir(), "voices");
+                if (!voicesDir.exists()) voicesDir.mkdirs();
+                File modelFile = new File(voicesDir, voice.getKey() + ".onnx");
+                File configFile = new File(voicesDir, voice.getKey() + ".onnx.json");
+
+                String modelUrl = BASE_URL + voice.getModelPath();
+                String configUrl = BASE_URL + voice.getConfigPath();
+
+                downloadSingleFile(modelUrl, modelFile);
+                downloadSingleFile(configUrl, configFile);
+
+                mainHandler.post(() -> {
+                    voice.setDownloaded(true);
+                    Toast.makeText(context, "Download Complete", Toast.LENGTH_SHORT).show();
+                    notifyItemChanged(position);
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    Toast.makeText(context, "Download Failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    notifyItemChanged(position);
+                });
+            }
+        });
+    }
+
+    private void downloadSingleFile(String fileUrl, File outputFile) throws Exception {
+        URL url = new URL(fileUrl);
+        HttpURLConnection connection;
+        int redirects = 0;
+        
+        while (true) {
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setInstanceFollowRedirects(false);
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0");
+            
+            int status = connection.getResponseCode();
+            if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
+                String newUrl = connection.getHeaderField("Location");
+                url = new URL(url, newUrl);
+                redirects++;
+                if (redirects > 10) throw new Exception("Redirect Loop");
+            } else if (status == HttpURLConnection.HTTP_OK) {
+                break;
+            } else {
+                throw new Exception("HTTP Error: " + status);
+            }
+        }
+
+        InputStream input = connection.getInputStream();
+        FileOutputStream output = new FileOutputStream(outputFile);
+        byte[] data = new byte[8192];
+        int count;
+        while ((count = input.read(data)) != -1) {
+            output.write(data, 0, count);
+        }
+        output.flush();
+        output.close();
+        input.close();
+
+        if (outputFile.length() < 1024) {
+            outputFile.delete();
+            throw new Exception("File Corrupt (Too Small)");
+        }
+    }
+    @Override
+    public int getItemCount() { return voiceList.size(); }
+    public static class VoiceViewHolder extends RecyclerView.ViewHolder {
+        TextView tvVoiceName, tvVoiceSize;
+        Button btnDownload, btnDelete, btnPreview;
+        public VoiceViewHolder(@NonNull View itemView) {
+            super(itemView);
+            tvVoiceName = itemView.findViewById(R.id.tv_voice_name);
+            tvVoiceSize = itemView.findViewById(R.id.tv_voice_size);
+            btnDownload = itemView.findViewById(R.id.btn_download);
+            btnDelete = itemView.findViewById(R.id.btn_delete);
+            btnPreview = itemView.findViewById(R.id.btn_preview);
+        }
+    }
+}
+
+
+
+======================================================================
+FILE: app/src/main/java/com/itfb/dhwanitts/VoiceDownloader.java
+======================================================================
+
+package com.itfb.dhwanitts;
+
+import android.os.Handler;
+import android.os.Looper;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class VoiceDownloader {
+    public interface DownloadListener {
+        void onProgress(int progress);
+        void onSuccess();
+        void onError(String error);
+    }
+
+    private static final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private static final Handler mainHandler = new Handler(Looper.getMainLooper());
+
+    public static void downloadVoice(String fileUrl, String destinationPath, DownloadListener listener) {
+        executor.execute(() -> {
+            try {
+                URL url = new URL(fileUrl);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.connect();
+
+                int responseCode = connection.getResponseCode();
+                if (responseCode != HttpURLConnection.HTTP_OK) {
+                    // रिस्पॉन्स कोड को पहले एक स्ट्रिंग में सेव कर रहे हैं ताकि Lambda में एरर न आए
+                    final String errorMsg = "Server returned HTTP " + responseCode;
+                    mainHandler.post(() -> listener.onError(errorMsg));
+                    return;
+                }
+
+                int fileLength = connection.getContentLength();
+                InputStream input = connection.getInputStream();
+                OutputStream output = new FileOutputStream(destinationPath);
+
+                byte[] data = new byte[4096];
+                long total = 0;
+                int count;
+                while ((count = input.read(data)) != -1) {
+                    total += count;
+                    if (fileLength > 0) {
+                        int progress = (int) (total * 100 / fileLength);
+                        mainHandler.post(() -> listener.onProgress(progress));
+                    }
+                    output.write(data, 0, count);
+                }
+                output.flush();
+                output.close();
+                input.close();
+
+                mainHandler.post(() -> listener.onSuccess());
+
+            } catch (Exception e) {
+                final String exMsg = e.getMessage() != null ? e.getMessage() : "Unknown network error";
+                mainHandler.post(() -> listener.onError("Error: " + exMsg));
+            }
+        });
+    }
+}
+
+
+
+======================================================================
+FILE: app/src/main/java/com/itfb/dhwanitts/VoiceLibraryFragment.java
+======================================================================
+
+package com.itfb.dhwanitts;
+
+import android.content.Context;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Toast;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import org.json.JSONObject;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class VoiceLibraryFragment extends Fragment {
+    private RecyclerView recyclerView;
+    private VoiceAdapter adapter;
+    private List<VoiceModel> voiceList = new ArrayList<>();
+    private ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private Handler mainHandler = new Handler(Looper.getMainLooper());
+
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.fragment_voice_library, container, false);
+        recyclerView = view.findViewById(R.id.recycler_voices);
+        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        
+        adapter = new VoiceAdapter(voiceList);
+        recyclerView.setAdapter(adapter);
+        
+        fetchOfficialVoices();
+        return view;
+    }
+
+    private void fetchOfficialVoices() {
+        Toast.makeText(getContext(), "Syncing official Piper catalog...", Toast.LENGTH_SHORT).show();
+        executorService.execute(() -> {
+            try {
+                URL url = new URL("https://huggingface.co/rhasspy/piper-voices/resolve/main/voices.json");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(15000);
+
+                BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) response.append(line);
+                reader.close();
+
+                String jsonStr = response.toString();
+                
+                FileOutputStream fos = requireContext().openFileOutput("cached_voices.json", Context.MODE_PRIVATE);
+                fos.write(jsonStr.getBytes());
+                fos.close();
+
+                parseVoicesJson(jsonStr);
+            } catch (Exception e) {
+                mainHandler.post(() -> Toast.makeText(getContext(), "Network Error. Loading cache.", Toast.LENGTH_LONG).show());
+                loadFromCache();
+            }
+        });
+    }
+
+    private void loadFromCache() {
+        try {
+            BufferedReader br = new BufferedReader(new InputStreamReader(requireContext().openFileInput("cached_voices.json")));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while((line = br.readLine()) != null) sb.append(line);
+            br.close();
+            parseVoicesJson(sb.toString());
+        } catch (Exception e) {
+            mainHandler.post(() -> Toast.makeText(getContext(), "No cached data. Please connect to internet.", Toast.LENGTH_LONG).show());
+        }
+    }
+
+    private void parseVoicesJson(String jsonStr) {
+        try {
+            JSONObject root = new JSONObject(jsonStr);
+            Iterator<String> keys = root.keys();
+            List<VoiceModel> fetchedVoices = new ArrayList<>();
+            File voicesDir = new File(requireContext().getFilesDir(), "voices");
+
+            while (keys.hasNext()) {
+                String key = keys.next();
+                JSONObject voiceObj = root.getJSONObject(key);
+                
+                JSONObject langObj = voiceObj.getJSONObject("language");
+                String langEnglish = langObj.optString("name_english", "Unknown");
+                String country = langObj.optString("country_english", "");
+                String quality = voiceObj.optString("quality", "medium");
+                String voiceName = voiceObj.optString("name", "Unknown");
+
+                JSONObject filesObj = voiceObj.getJSONObject("files");
+                String modelPath = "";
+                String configPath = "";
+                long totalSizeBytes = 0;
+
+                Iterator<String> fileKeys = filesObj.keys();
+                while (fileKeys.hasNext()) {
+                    String filePath = fileKeys.next();
+                    if (filePath.endsWith(".onnx")) modelPath = filePath;
+                    else if (filePath.endsWith(".json")) configPath = filePath;
+                    
+                    JSONObject fileMeta = filesObj.getJSONObject(filePath);
+                    totalSizeBytes += fileMeta.optLong("size_bytes", 0);
+                }
+
+                if (modelPath.isEmpty() || configPath.isEmpty()) continue;
+
+                String sizeMB = String.format("%.1f MB", totalSizeBytes / (1024.0 * 1024.0));
+                
+                File checkModel = new File(voicesDir, key + ".onnx");
+                File checkConfig = new File(voicesDir, key + ".onnx.json");
+                boolean isDownloaded = checkModel.exists() && checkConfig.exists() && checkModel.length() > 50000;
+
+                fetchedVoices.add(new VoiceModel(key, langEnglish, country, voiceName, quality, modelPath, configPath, sizeMB, isDownloaded));
+            }
+
+            mainHandler.post(() -> {
+                voiceList.clear();
+                voiceList.addAll(fetchedVoices);
+                adapter.notifyDataSetChanged();
+                Toast.makeText(getContext(), "Voices Loaded!", Toast.LENGTH_SHORT).show();
+            });
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+}
+
+
+
+======================================================================
+FILE: app/src/main/java/com/itfb/dhwanitts/VoiceModel.java
+======================================================================
+
+package com.itfb.dhwanitts;
+
+public class VoiceModel {
+    private String key;
+    private String languageName;
+    private String country;
+    private String voiceName;
+    private String quality;
+    private String modelPath;
+    private String configPath;
+    private String sizeMB;
+    private boolean isDownloaded;
+
+    public VoiceModel(String key, String languageName, String country, String voiceName, String quality, String modelPath, String configPath, String sizeMB, boolean isDownloaded) {
+        this.key = key;
+        this.languageName = languageName;
+        this.country = country;
+        this.voiceName = voiceName;
+        this.quality = quality;
+        this.modelPath = modelPath;
+        this.configPath = configPath;
+        this.sizeMB = sizeMB;
+        this.isDownloaded = isDownloaded;
+    }
+
+    public String getKey() { return key; }
+    public String getLanguageName() { return languageName; }
+    public String getCountry() { return country; }
+    public String getVoiceName() { return voiceName; }
+    public String getQuality() { return quality; }
+    public String getModelPath() { return modelPath; }
+    public String getConfigPath() { return configPath; }
+    public String getSizeMB() { return sizeMB; }
+    public boolean isDownloaded() { return isDownloaded; }
+    public void setDownloaded(boolean downloaded) { isDownloaded = downloaded; }
+}
+
+
+
+======================================================================
+FILE: app/src/main/java/com/itfb/dhwanitts/WelcomeActivity.java
+======================================================================
+
+package com.itfb.dhwanitts;
+
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.os.Bundle;
+import android.widget.Button;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class WelcomeActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        // चेक करें कि क्या यूजर पहले ही ऐप खोल चुका है
+        SharedPreferences prefs = getSharedPreferences("DhwaniTTS_Prefs", MODE_PRIVATE);
+        boolean isFirstLaunch = prefs.getBoolean("isFirstLaunch", true);
+
+        if (!isFirstLaunch) {
+            // अगर पहली बार नहीं है, तो सीधे MainActivity पर जाएं
+            startActivity(new Intent(this, MainActivity.class));
+            finish();
+            return;
+        }
+
+        setContentView(R.layout.activity_welcome);
+
+        Button btnOk = findViewById(R.id.btn_ok_welcome);
+        btnOk.setOnClickListener(v -> {
+            // पहली बार का स्टेटस सेव करें
+            prefs.edit().putBoolean("isFirstLaunch", false).apply();
+            
+            // MainActivity पर जाएं
+            startActivity(new Intent(WelcomeActivity.this, MainActivity.class));
+            finish();
+        });
+    }
+}
+
+
+
+======================================================================
+FILE: app/src/main/res/drawable/ic_launcher.xml
+======================================================================
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="24.0"
+    android:viewportHeight="24.0">
+    <!-- यह स्पीकर का डिज़ाइन है -->
+    <path
+        android:fillColor="#00796B"
+        android:pathData="M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z"/>
+</vector>
+
+
+
+======================================================================
+FILE: app/src/main/res/layout/activity_about.xml
+======================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:gravity="center"
+    android:background="#121212">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="DhwaniTTS"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="by ITFB"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="#BB86FC"
+        android:layout_marginBottom="24dp"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Interested Technology for Blind (ITFB)"
+        android:textSize="16sp"
+        android:textColor="#AAAAAA"
+        android:textAlignment="center"
+        android:layout_marginBottom="24dp"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="DhwaniTTS is a fully offline, open-source Android Text-to-Speech engine powered by Piper TTS (C++). Our vision is to provide high-quality, authentic, and accessible voices globally, completely free of charge."
+        android:textSize="16sp"
+        android:textColor="#DDDDDD"
+        android:lineSpacingExtra="6dp"
+        android:textAlignment="center"/>
+
+</LinearLayout>
+
+
+
+======================================================================
+FILE: app/src/main/res/layout/activity_main.xml
+======================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- यह वह जगह है जहाँ हम टैब बदलने पर अलग-अलग स्क्रीन (Home, Library) दिखाएंगे -->
+    <FrameLayout
+        android:id="@+id/fragment_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@+id/bottom_navigation" />
+
+    <!-- यह हमारा बॉटम नेविगेशन बार है -->
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottom_navigation"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        app:menu="@menu/bottom_nav_menu" />
+
+</RelativeLayout>
+
+
+
+======================================================================
+FILE: app/src/main/res/layout/activity_settings.xml
+======================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:gravity="center_horizontal">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="DhwaniTTS Settings &amp; About"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp" />
+
+    <!-- डार्क मोड स्विच -->
+    <Switch
+        android:id="@+id/switch_dark_mode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Dark Mode"
+        android:textSize="16sp"
+        android:layout_marginBottom="16dp"
+        android:padding="8dp" />
+
+    <!-- वाई-फाई ओन्ली स्विच -->
+    <Switch
+        android:id="@+id/switch_wifi_only"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Wi-Fi Only Mode"
+        android:textSize="16sp"
+        android:layout_marginBottom="16dp"
+        android:padding="8dp" />
+
+    <!-- हाई कंट्रास्ट स्विच -->
+    <Switch
+        android:id="@+id/switch_high_contrast"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="High Contrast"
+        android:textSize="16sp"
+        android:layout_marginBottom="16dp"
+        android:padding="8dp" />
+
+    <!-- फॉन्ट साइज़ चयन के लिए Spinner -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Select Font Size:"
+        android:textSize="16sp"
+        android:layout_marginBottom="8dp" />
+
+    <Spinner
+        android:id="@+id/spinner_font_size"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:padding="8dp" />
+
+    <!-- WhatsApp कांटेक्ट डेवलपर बटन -->
+    <Button
+        android:id="@+id/btn_contact_developer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Contact Developer (WhatsApp)"
+        android:textAllCaps="false"
+        android:padding="12dp" />
+
+</LinearLayout>
+
+
+
+======================================================================
+FILE: app/src/main/res/layout/activity_welcome.xml
+======================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="?android:attr/colorBackground">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:gravity="center_horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Welcome to DhwaniTTS"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:textColor="?android:attr/textColorPrimary"
+            android:layout_marginTop="32dp"
+            android:layout_marginBottom="24dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="About ITFB Community:\nInterested Technology for Blind (ITFB) is a dedicated community working towards the digital empowerment and independence of visually impaired individuals. We focus on providing accessible technological solutions, step-by-step training, and resources to make everyday digital life easier and more self-reliant for screen reader users.\n\nAbout DhwaniTTS:\nDhwaniTTS is an open-source, fully offline text-to-speech engine powered by the Piper TTS architecture. It is specifically designed to be highly responsive and seamlessly accessible with TalkBack. With DhwaniTTS, users can enjoy natural-sounding, human-like voices in multiple global languages without relying on an active internet connection. Our ultimate goal is to provide a smooth, privacy-focused, and high-quality reading experience for everyone."
+            android:textSize="17sp"
+            android:lineSpacingExtra="6dp"
+            android:textColor="?android:attr/textColorSecondary"
+            android:layout_marginBottom="40dp" />
+
+        <Button
+            android:id="@+id/btn_ok_welcome"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:text="OK, Let's Start"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:contentDescription="OK, Let's Start app. Double tap to continue." />
+
+    </LinearLayout>
+</ScrollView>
+
+
+
+======================================================================
+FILE: app/src/main/res/layout/fragment_home.xml
+======================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp">
+            
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Home"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"/>
+
+            <Button
+                android:id="@+id/btn_clear_settings"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Clear Settings"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                style="?android:attr/borderlessButtonStyle"
+                android:textColor="#D32F2F"
+                android:minHeight="48dp" />
+        </RelativeLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Select Language"
+            android:labelFor="@+id/spinner_language"
+            android:textStyle="bold" />
+        <Spinner
+            android:id="@+id/spinner_language"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Select Voice"
+            android:labelFor="@+id/spinner_voice"
+            android:textStyle="bold" />
+        <Spinner
+            android:id="@+id/spinner_voice"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/tv_speech_rate_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Speech Rate: 50%"
+            android:textStyle="bold" />
+        <SeekBar
+            android:id="@+id/seekbar_speech_rate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:max="100"
+            android:progress="50"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- नया Force Speech Rate टॉगल यहाँ जोड़ा गया है -->
+        <Switch
+            android:id="@+id/switch_force_speech"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Force Speech Rate"
+            android:minHeight="48dp"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/tv_pitch_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Pitch Rate: 50%"
+            android:textStyle="bold" />
+        <SeekBar
+            android:id="@+id/seekbar_pitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:max="100"
+            android:progress="50"
+            android:layout_marginBottom="8dp"/>
+
+        <Switch
+            android:id="@+id/switch_force_pitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Force Pitch Rate"
+            android:minHeight="48dp"
+            android:layout_marginBottom="24dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Number Reading Format"
+            android:labelFor="@+id/spinner_number_reading"
+            android:textStyle="bold" />
+        <Spinner
+            android:id="@+id/spinner_number_reading"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Punctuation"
+            android:labelFor="@+id/spinner_punctuation"
+            android:textStyle="bold" />
+        <Spinner
+            android:id="@+id/spinner_punctuation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginBottom="32dp" />
+
+        <Button
+            android:id="@+id/btn_test"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="Test Voice"
+            android:layout_marginBottom="12dp" />
+
+        <Button
+            android:id="@+id/btn_save_settings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="Save Settings as Default"
+            android:layout_marginBottom="12dp" />
+
+        <Button
+            android:id="@+id/btn_reset"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="Reset to Default"
+            android:layout_marginBottom="24dp" />
+
+    </LinearLayout>
+</ScrollView>
+
+
+
+======================================================================
+FILE: app/src/main/res/layout/fragment_settings_more.xml
+======================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Settings &amp; More"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp" />
+
+    <Button
+        android:id="@+id/btn_about_itfb"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
+        android:text="About ITFB"
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/btn_open_tts_settings"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
+        android:text="Open Default Android TTS Settings"
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/btn_app_settings"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
+        android:text="App Settings" />
+
+</LinearLayout>
+
+
+
+======================================================================
+FILE: app/src/main/res/layout/fragment_voice_library.xml
+======================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler_voices"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+</LinearLayout>
+
+
+
+======================================================================
+FILE: app/src/main/res/layout/item_language.xml
+======================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="20dp"
+    android:layout_marginBottom="8dp"
+    android:background="#D6D6D6"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/tv_lang_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="#000000" />
+</LinearLayout>
+
+
+
+======================================================================
+FILE: app/src/main/res/layout/item_voice.xml
+======================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:layout_marginBottom="8dp"
+    android:background="#2E2E2E">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <TextView
+            android:id="@+id/tv_voice_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"/>
+        <TextView
+            android:id="@+id/tv_voice_size"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textColor="#00E676"
+            android:textStyle="bold"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="12dp"
+        android:gravity="end">
+
+        <Button
+            android:id="@+id/btn_preview"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="Preview"
+            android:textSize="12sp"
+            android:layout_marginEnd="8dp"
+            android:backgroundTint="#FF9800"/>
+
+        <Button
+            android:id="@+id/btn_download"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="Download"
+            android:textSize="12sp"
+            android:backgroundTint="#1976D2"/>
+
+        <Button
+            android:id="@+id/btn_delete"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="Delete"
+            android:textSize="12sp"
+            android:visibility="gone"
+            android:backgroundTint="#D32F2F"/>
+    </LinearLayout>
+</LinearLayout>
+
+
+
+======================================================================
+FILE: app/src/main/res/menu/bottom_nav_menu.xml
+======================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_home"
+        android:title="Home" />
+    <item
+        android:id="@+id/nav_voice_library"
+        android:title="Voice Library" />
+    <item
+        android:id="@+id/nav_settings"
+        android:title="Settings" />
+</menu>
+
+
+
+======================================================================
+FILE: app/src/main/res/values/strings.xml
+======================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Dhwani TTS by ITFB</string>
+</resources>
+
+
+
+======================================================================
+FILE: app/src/main/res/values/themes.xml
+======================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- आपके ऐप की मुख्य थीम (Material Design) -->
+    <style name="Theme.DhwaniTTS" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <!-- यहाँ हम डिफ़ॉल्ट कलर्स इस्तेमाल कर रहे हैं ताकि कोई नया एरर न आए -->
+    </style>
+</resources>
+
+
+
+======================================================================
+FILE: app/src/main/res/xml/tts_engine.xml
+======================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<tts-engine xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.itfb.dhwanitts.SettingsActivity" />
+
+
+
+======================================================================
+FILE: build.gradle
+======================================================================
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath "com.android.tools.build:gradle:8.1.0"
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+
+
+======================================================================
+FILE: build_log.txt
+======================================================================
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.4/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+WARNING: We recommend using a newer Android Gradle plugin to use compileSdk = 34
+
+This Android Gradle plugin (8.1.0) was tested up to compileSdk = 33 (and compileSdkPreview = "UpsideDownCakePrivacySandbox").
+
+You are strongly encouraged to update your project to use a newer
+Android Gradle plugin that has been tested with compileSdk = 34.
+
+If you are already using the latest version of the Android Gradle plugin,
+you may need to wait until a newer version with support for compileSdk = 34 is available.
+
+To suppress this warning, add/update
+    android.suppressUnsupportedCompileSdk=34
+to this project's gradle.properties.
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:checkDebugAarMetadata FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:checkDebugAarMetadata'.
+> Configuration `:app:debugRuntimeClasspath` contains AndroidX dependencies, but the `android.useAndroidX` property is not enabled, which may cause runtime issues.
+  Set `android.useAndroidX=true` in the `gradle.properties` file and retry.
+  The following AndroidX dependencies are detected:
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.activity:activity:1.8.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.annotation:annotation:1.3.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.appcompat:appcompat-resources:1.6.1 -> androidx.collection:collection:1.1.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.core:core:1.9.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.annotation:annotation-experimental:1.3.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.core:core:1.9.0 -> androidx.concurrent:concurrent-futures:1.1.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.lifecycle:lifecycle-runtime:2.6.1
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.savedstate:savedstate:1.2.1 -> androidx.arch.core:core-common:2.2.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.fragment:fragment:1.3.6 -> androidx.lifecycle:lifecycle-livedata-core:2.6.1 -> androidx.arch.core:core-runtime:2.2.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.savedstate:savedstate:1.2.1 -> androidx.lifecycle:lifecycle-common:2.6.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.fragment:fragment:1.3.6 -> androidx.loader:loader:1.0.0 -> androidx.lifecycle:lifecycle-livedata:2.6.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.fragment:fragment:1.3.6 -> androidx.lifecycle:lifecycle-livedata-core:2.6.1
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.emoji2:emoji2:1.2.0 -> androidx.lifecycle:lifecycle-process:2.6.1
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.emoji2:emoji2:1.2.0 -> androidx.startup:startup-runtime:1.1.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.activity:activity:1.8.0 -> androidx.tracing:tracing:1.0.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.lifecycle:lifecycle-viewmodel:2.6.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.fragment:fragment:1.3.6 -> androidx.lifecycle:lifecycle-viewmodel-savedstate:2.6.1
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.core:core-ktx:1.9.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.savedstate:savedstate:1.2.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.activity:activity:1.8.0 -> androidx.profileinstaller:profileinstaller:1.3.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.core:core:1.9.0 -> androidx.versionedparcelable:versionedparcelable:1.1.1
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.appcompat:appcompat-resources:1.6.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.vectordrawable:vectordrawable:1.1.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.appcompat:appcompat-resources:1.6.1 -> androidx.vectordrawable:vectordrawable-animated:1.1.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.appcompat:appcompat-resources:1.6.1 -> androidx.vectordrawable:vectordrawable-animated:1.1.0 -> androidx.interpolator:interpolator:1.0.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.cursoradapter:cursoradapter:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.drawerlayout:drawerlayout:1.1.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.drawerlayout:drawerlayout:1.1.1 -> androidx.customview:customview:1.1.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.emoji2:emoji2:1.2.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.emoji2:emoji2-views-helper:1.2.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.fragment:fragment:1.3.6
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.fragment:fragment:1.3.6 -> androidx.viewpager:viewpager:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.fragment:fragment:1.3.6 -> androidx.loader:loader:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.resourceinspection:resourceinspection-annotation:1.0.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.cardview:cardview:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.coordinatorlayout:coordinatorlayout:1.1.0
+  :app:debugRuntimeClasspath -> androidx.constraintlayout:constraintlayout:2.1.4
+  :app:debugRuntimeClasspath -> androidx.constraintlayout:constraintlayout:2.1.4 -> androidx.constraintlayout:constraintlayout-core:1.0.4
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.dynamicanimation:dynamicanimation:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.dynamicanimation:dynamicanimation:1.0.0 -> androidx.legacy:legacy-support-core-utils:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.dynamicanimation:dynamicanimation:1.0.0 -> androidx.legacy:legacy-support-core-utils:1.0.0 -> androidx.documentfile:documentfile:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.dynamicanimation:dynamicanimation:1.0.0 -> androidx.legacy:legacy-support-core-utils:1.0.0 -> androidx.localbroadcastmanager:localbroadcastmanager:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.dynamicanimation:dynamicanimation:1.0.0 -> androidx.legacy:legacy-support-core-utils:1.0.0 -> androidx.print:print:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.recyclerview:recyclerview:1.1.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.transition:transition:1.2.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.viewpager2:viewpager2:1.0.0
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 26s
+2 actionable tasks: 1 executed, 1 up-to-date
+
+
+
+======================================================================
+FILE: gradle.properties
+======================================================================
+
+org.gradle.jvmargs=-Xmx512m
+org.gradle.daemon=false
+org.gradle.parallel=false
+android.useAndroidX=true
+android.enableJetifier=true
+android.suppressUnsupportedCompileSdk=34
+
+
+
+======================================================================
+FILE: gradle/wrapper/gradle-wrapper.properties
+======================================================================
+
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip
+networkTimeout=10000
+retries=0
+retryBackOffMs=500
+validateDistributionUrl=true
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+
+
+
+======================================================================
+FILE: gradlew
+======================================================================
+
+#!/bin/sh
+
+#
+# Copyright © 2015 the original authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+##############################################################################
+#
+#   gradlew start up script for POSIX generated by Gradle.
+#
+#   Important for running:
+#
+#   (1) You need a POSIX-compliant shell to run this script. If your /bin/sh is
+#       noncompliant, but you have some other compliant shell such as ksh or
+#       bash, then to run this script, type that shell name before the whole
+#       command line, like:
+#
+#           ksh gradlew
+#
+#       Busybox and similar reduced shells will NOT work, because this script
+#       requires all of these POSIX shell features:
+#         * functions;
+#         * expansions «$var», «${var}», «${var:-default}», «${var+SET}»,
+#           «${var#prefix}», «${var%suffix}», and «$( cmd )»;
+#         * compound commands having a testable exit status, especially «case»;
+#         * various built-in commands including «command», «set», and «ulimit».
+#
+#   Important for patching:
+#
+#   (2) This script targets any POSIX shell, so it avoids extensions provided
+#       by Bash, Ksh, etc; in particular arrays are avoided.
+#
+#       The "traditional" practice of packing multiple parameters into a
+#       space-separated string is a well documented source of bugs and security
+#       problems, so this is (mostly) avoided, by progressively accumulating
+#       options in "$@", and eventually passing that to Java.
+#
+#       Where the inherited environment variables (DEFAULT_JVM_OPTS, JAVA_OPTS,
+#       and GRADLE_OPTS) rely on word-splitting, this is performed explicitly;
+#       see the in-line comments for details.
+#
+#       There are tweaks for specific operating systems such as AIX, CygWin,
+#       Darwin, MinGW, and NonStop.
+#
+#   (3) This script is generated from the Groovy template
+#       https://github.com/gradle/gradle/blob/3d91ce3b8caaf77ad09f381f43615b715b53f72c/platforms/jvm/plugins-application/src/main/resources/org/gradle/api/internal/plugins/unixStartScript.txt
+#       within the Gradle project.
+#
+#       You can find Gradle at https://github.com/gradle/gradle/.
+#
+##############################################################################
+
+# Attempt to set APP_HOME
+
+# Resolve links: $0 may be a link
+app_path=$0
+
+# Need this for daisy-chained symlinks.
+while
+    APP_HOME=${app_path%"${app_path##*/}"}  # leaves a trailing /; empty if no leading path
+    [ -h "$app_path" ]
+do
+    ls=$( ls -ld "$app_path" )
+    link=${ls#*' -> '}
+    case $link in             #(
+      /*)   app_path=$link ;; #(
+      *)    app_path=$APP_HOME$link ;;
+    esac
+done
+
+# This is normally unused
+# shellcheck disable=SC2034
+APP_BASE_NAME=${0##*/}
+# Discard cd standard output in case $CDPATH is set (https://github.com/gradle/gradle/issues/25036)
+APP_HOME=$( cd -P "${APP_HOME:-./}" > /dev/null && printf '%s\n' "$PWD" ) || exit
+
+# Use the maximum available, or set MAX_FD != -1 to use that value.
+MAX_FD=maximum
+
+warn () {
+    echo "$*"
+} >&2
+
+die () {
+    echo
+    echo "$*"
+    echo
+    exit 1
+} >&2
+
+# OS specific support (must be 'true' or 'false').
+cygwin=false
+msys=false
+darwin=false
+nonstop=false
+case "$( uname )" in                #(
+  CYGWIN* )         cygwin=true  ;; #(
+  Darwin* )         darwin=true  ;; #(
+  MSYS* | MINGW* )  msys=true    ;; #(
+  NONSTOP* )        nonstop=true ;;
+esac
+
+
+
+# Determine the Java command to use to start the JVM.
+if [ -n "$JAVA_HOME" ] ; then
+    if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
+        # IBM's JDK on AIX uses strange locations for the executables
+        JAVACMD=$JAVA_HOME/jre/sh/java
+    else
+        JAVACMD=$JAVA_HOME/bin/java
+    fi
+    if [ ! -x "$JAVACMD" ] ; then
+        die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
+
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+    fi
+else
+    JAVACMD=java
+    if ! command -v java >/dev/null 2>&1
+    then
+        die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+    fi
+fi
+
+# Increase the maximum file descriptors if we can.
+if ! "$cygwin" && ! "$darwin" && ! "$nonstop" ; then
+    case $MAX_FD in #(
+      max*)
+        # In POSIX sh, ulimit -H is undefined. That's why the result is checked to see if it worked.
+        # shellcheck disable=SC2039,SC3045
+        MAX_FD=$( ulimit -H -n ) ||
+            warn "Could not query maximum file descriptor limit"
+    esac
+    case $MAX_FD in  #(
+      '' | soft) :;; #(
+      *)
+        # In POSIX sh, ulimit -n is undefined. That's why the result is checked to see if it worked.
+        # shellcheck disable=SC2039,SC3045
+        ulimit -n "$MAX_FD" ||
+            warn "Could not set maximum file descriptor limit to $MAX_FD"
+    esac
+fi
+
+# Collect all arguments for the java command, stacking in reverse order:
+#   * args from the command line
+#   * the main class name
+#   * -classpath
+#   * -D...appname settings
+#   * --module-path (only if needed)
+#   * DEFAULT_JVM_OPTS, JAVA_OPTS, and GRADLE_OPTS environment variables.
+
+# For Cygwin or MSYS, switch paths to Windows format before running java
+if "$cygwin" || "$msys" ; then
+    APP_HOME=$( cygpath --path --mixed "$APP_HOME" )
+
+    JAVACMD=$( cygpath --unix "$JAVACMD" )
+
+    # Now convert the arguments - kludge to limit ourselves to /bin/sh
+    for arg do
+        if
+            case $arg in                                #(
+              -*)   false ;;                            # don't mess with options #(
+              /?*)  t=${arg#/} t=/${t%%/*}              # looks like a POSIX filepath
+                    [ -e "$t" ] ;;                      #(
+              *)    false ;;
+            esac
+        then
+            arg=$( cygpath --path --ignore --mixed "$arg" )
+        fi
+        # Roll the args list around exactly as many times as the number of
+        # args, so each arg winds up back in the position where it started, but
+        # possibly modified.
+        #
+        # NB: a `for` loop captures its iteration list before it begins, so
+        # changing the positional parameters here affects neither the number of
+        # iterations, nor the values presented in `arg`.
+        shift                   # remove old arg
+        set -- "$@" "$arg"      # push replacement arg
+    done
+fi
+
+
+# Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
+DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+
+# Collect all arguments for the java command:
+#   * DEFAULT_JVM_OPTS, JAVA_OPTS, and optsEnvironmentVar are not allowed to contain shell fragments,
+#     and any embedded shellness will be escaped.
+#   * For example: A user cannot expect ${Hostname} to be expanded, as it is an environment variable and will be
+#     treated as '${Hostname}' itself on the command line.
+
+set -- \
+        "-Dorg.gradle.appname=$APP_BASE_NAME" \
+        -jar "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" \
+        "$@"
+
+# Stop when "xargs" is not available.
+if ! command -v xargs >/dev/null 2>&1
+then
+    die "xargs is not available"
+fi
+
+# Use "xargs" to parse quoted args.
+#
+# With -n1 it outputs one arg per line, with the quotes and backslashes removed.
+#
+# In Bash we could simply go:
+#
+#   readarray ARGS < <( xargs -n1 <<<"$var" ) &&
+#   set -- "${ARGS[@]}" "$@"
+#
+# but POSIX shell has neither arrays nor command substitution, so instead we
+# post-process each arg (as a line of input to sed) to backslash-escape any
+# character that might be a shell metacharacter, then use eval to reverse
+# that process (while maintaining the separation between arguments), and wrap
+# the whole thing up as a single "set" statement.
+#
+# This will of course break if any of these variables contains a newline or
+# an unmatched quote.
+#
+
+eval "set -- $(
+        printf '%s\n' "$DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS" |
+        xargs -n1 |
+        sed ' s~[^-[:alnum:]+,./:=@_]~\\&~g; ' |
+        tr '\n' ' '
+    )" '"$@"'
+
+exec "$JAVACMD" "$@"
+
+
+
+======================================================================
+FILE: local.properties
+======================================================================
+
+sdk.dir=/data/data/com.termux/files/home/android-sdk
+
+
+
+======================================================================
+FILE: settings.gradle
+======================================================================
+
+include ':app'
+rootProject.name = "DhwaniTTS"
+
+
+
+======================================================================
+FILE: setup_sdk.sh
+======================================================================
+
+#!/bin/bash
+
+# Termux में आम तौर पर इस्तेमाल होने वाले SDK रास्ते
+COMMON_PATHS=(
+    "$HOME/android-sdk" 
+    "$HOME/Android/Sdk" 
+    "$PREFIX/share/android-sdk" 
+    "$PREFIX/opt/android-sdk" 
+    "/data/data/com.termux/files/usr/share/android-sdk"
+    "$HOME/Android"
+)
+
+SDK_FOUND=""
+
+# सही रास्ता ढूंढना
+for p in "${COMMON_PATHS[@]}"; do
+    if [ -d "$p" ]; then
+        SDK_FOUND="$p"
+        break
+    fi
+done
+
+if [ -n "$SDK_FOUND" ]; then
+    # local.properties फाइल बनाना
+    echo "sdk.dir=$SDK_FOUND" > local.properties
+    echo "✅ बहुत बढ़िया! आपका Android SDK यहाँ मिल गया: $SDK_FOUND"
+    echo "✅ local.properties फाइल सफलतापूर्वक बन गई है।"
+    echo "🚀 चलिए, अब ऐप का बिल्ड फिर से शुरू करते हैं (512MB रैम लिमिट के साथ)..."
+    
+    chmod +x gradlew
+    ./gradlew assembleDebug
+else
+    echo "❌ माफ़ करना, मुझे Termux के डिफ़ॉल्ट फोल्डर्स में Android SDK नहीं मिला।"
+    echo "👉 कृपया मुझे बताएं कि आपने Android SDK किस नाम के फोल्डर में इंस्टॉल किया है (जैसे: ~/my-sdk)?"
+fi
+
+

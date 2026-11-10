@@ -132,7 +132,7 @@ public class HomeFragment extends Fragment {
 
                 if (modelFile.exists() && configFile.exists()) {
                     PiperEngine engine = new PiperEngine();
-                    if (engine.initEngine(modelFile.getAbsolutePath(), configFile.getAbsolutePath())) {
+                    if (engine.initEngine(modelFile.getAbsolutePath(), configFile.getAbsolutePath(), PiperEngine.setupEspeakData(requireContext()))) {
                         byte[] audioData = engine.synthesizeText(text, speed);
                         if (audioData != null && audioData.length > 0) {
                             int minBuf = AudioTrack.getMinBufferSize(16000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
