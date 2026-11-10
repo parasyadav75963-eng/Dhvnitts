@@ -1,44 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true"
-    android:background="?android:attr/colorBackground">
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:gravity="center">
 
-    <LinearLayout
+    <TextView
+        android:id="@+id/tv_welcome_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="DhwaniTTS"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp" />
+
+    <TextView
+        android:id="@+id/tv_welcome_notice"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="24dp"
-        android:gravity="center_horizontal">
+        android:textSize="16sp"
+        android:lineSpacingExtra="6dp"
+        android:layout_marginBottom="32dp" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Welcome to DhwaniTTS"
-            android:textSize="28sp"
-            android:textStyle="bold"
-            android:textColor="?android:attr/textColorPrimary"
-            android:layout_marginTop="32dp"
-            android:layout_marginBottom="24dp" />
+    <Button
+        android:id="@+id/btn_lets_start"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Let's Start"
+        android:textSize="16sp"
+        android:padding="12dp" />
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="About ITFB Community:\nInterested Technology for Blind (ITFB) is a dedicated community working towards the digital empowerment and independence of visually impaired individuals. We focus on providing accessible technological solutions, step-by-step training, and resources to make everyday digital life easier and more self-reliant for screen reader users.\n\nAbout DhwaniTTS:\nDhwaniTTS is an open-source, fully offline text-to-speech engine powered by the Piper TTS architecture. It is specifically designed to be highly responsive and seamlessly accessible with TalkBack. With DhwaniTTS, users can enjoy natural-sounding, human-like voices in multiple global languages without relying on an active internet connection. Our ultimate goal is to provide a smooth, privacy-focused, and high-quality reading experience for everyone."
-            android:textSize="17sp"
-            android:lineSpacingExtra="6dp"
-            android:textColor="?android:attr/textColorSecondary"
-            android:layout_marginBottom="40dp" />
-
-        <Button
-            android:id="@+id/btn_ok_welcome"
-            android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:text="OK, Let's Start"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:contentDescription="OK, Let's Start app. Double tap to continue." />
-
-    </LinearLayout>
-</ScrollView>
+</LinearLayout>
