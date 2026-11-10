@@ -33,7 +33,7 @@ public class HomeFragment extends Fragment {
     private Spinner spinnerLanguage, spinnerVoice, spinnerNumber, spinnerPunctuation;
     private SeekBar seekbarSpeechRate, seekbarPitch;
     private TextView tvSpeechRate, tvPitch;
-    private Switch switchForcePitch, switchForceSpeech; // नया स्विच जोड़ा गया
+    private Switch switchForcePitch, switchForceSpeech;
 
     private List<VoiceModel> allDownloadedVoices = new ArrayList<>();
     private List<String> downloadedLanguages = new ArrayList<>();
@@ -41,14 +41,12 @@ public class HomeFragment extends Fragment {
     private ArrayAdapter<String> langAdapter;
     private ArrayAdapter<String> voiceAdapter;
     
-    // असली आवाज़ निकालने के लिए TextToSpeech इंजन
     private TextToSpeech testTts;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_home, container, false);
-
         prefs = requireActivity().getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
 
         spinnerLanguage = view.findViewById(R.id.spinner_language);
@@ -61,17 +59,16 @@ public class HomeFragment extends Fragment {
         tvSpeechRate = view.findViewById(R.id.tv_speech_rate_label);
         tvPitch = view.findViewById(R.id.tv_pitch_label);
         switchForcePitch = view.findViewById(R.id.switch_force_pitch);
-        switchForceSpeech = view.findViewById(R.id.switch_force_speech); // इसे UI से जोड़ा गया
+        switchForceSpeech = view.findViewById(R.id.switch_force_speech);
 
         Button btnTest = view.findViewById(R.id.btn_test);
         Button btnSave = view.findViewById(R.id.btn_save_settings);
         Button btnReset = view.findViewById(R.id.btn_reset);
         Button btnClear = view.findViewById(R.id.btn_clear_settings);
 
-        // TTS इंजन को स्टार्ट करना (टेस्टिंग के लिए)
         testTts = new TextToSpeech(getContext(), status -> {
             if (status == TextToSpeech.SUCCESS) {
-                testTts.setLanguage(new Locale("hi", "IN")); // डिफ़ॉल्ट हिंदी पर सेट किया
+                testTts.setLanguage(new Locale("hi", "IN"));
             }
         });
 
@@ -110,7 +107,6 @@ public class HomeFragment extends Fragment {
         btnReset.setOnClickListener(v -> resetSettings());
         btnClear.setOnClickListener(v -> clearSettings());
         
-        // असली 'Test Voice' बटन का लॉजिक
         btnTest.setOnClickListener(v -> {
             if (allDownloadedVoices.isEmpty()) {
                 Toast.makeText(getContext(), "Please download a voice first!", Toast.LENGTH_SHORT).show();
@@ -118,13 +114,11 @@ public class HomeFragment extends Fragment {
                 String voiceName = spinnerVoice.getSelectedItem().toString();
                 String textToSpeak = "This is a test preview for " + voiceName + " voice.";
                 
-                // स्लाइडर की वैल्यू से स्पीड और पिच सेट करना (1.0 नॉर्मल होता है)
                 float speed = seekbarSpeechRate.getProgress() / 50.0f;
                 float pitch = seekbarPitch.getProgress() / 50.0f;
                 testTts.setSpeechRate(speed);
                 testTts.setPitch(pitch);
                 
-                // असली आवाज़ प्ले करना
                 testTts.speak(textToSpeak, TextToSpeech.QUEUE_FLUSH, null, null);
                 Toast.makeText(getContext(), "Playing preview...", Toast.LENGTH_SHORT).show();
             }
@@ -136,7 +130,7 @@ public class HomeFragment extends Fragment {
     private void scanDownloadedVoices() {
         allDownloadedVoices.clear();
         downloadedLanguages.clear();
-        File voicesDir = new File(requireContext().getFilesDir(), "piper_voices");
+        File voicesDir = new File(requireContext().getFilesDir(), "voices");
         
         try {
             InputStream is = requireContext().getAssets().open("voices.json");
@@ -144,17 +138,24 @@ public class HomeFragment extends Fragment {
             is.read(buffer);
             is.close();
             
-            JSONArray jsonArray = new JSONArray(new String(buffer, StandardCharsets.UTF_8));
-            for (int i = 0; i < jsonArray.length(); i++) {
-                JSONObject obj = jsonArray.getJSONObject(i);
-                String lang = obj.getString("language");
-                String name = obj.getString("voiceName");
+            JSONObject jsonObject = new JSONObject(new String(buffer, StandardCharsets.UTF_8));
+            JSONArray languagesArray = jsonObject.getJSONArray("languages");
+            
+            for (int i = 0; i < languagesArray.length(); i++) {
+                JSONObject langObj = languagesArray.getJSONObject(i);
+                String lang = langObj.getString("language");
+                JSONArray voicesArray = langObj.getJSONArray("voices");
                 
-                File checkFile = new File(voicesDir, name + ".onnx");
-                if (checkFile.exists()) {
-                    allDownloadedVoices.add(new VoiceModel(lang, name, "", "", true));
-                    if (!downloadedLanguages.contains(lang)) {
-                        downloadedLanguages.add(lang);
+                for (int j = 0; j < voicesArray.length(); j++) {
+                    JSONObject voiceObj = voicesArray.getJSONObject(j);
+                    String name = voiceObj.getString("voiceName");
+                    
+                    File checkFile = new File(voicesDir, name + ".onnx");
+                    if (checkFile.exists()) {
+                        allDownloadedVoices.add(new VoiceModel(lang, name, "", "", true));
+                        if (!downloadedLanguages.contains(lang)) {
+                            downloadedLanguages.add(lang);
+                        }
                     }
                 }
             }
@@ -198,7 +199,7 @@ public class HomeFragment extends Fragment {
         editor.putInt("speech_rate", seekbarSpeechRate.getProgress());
         editor.putInt("pitch_rate", seekbarPitch.getProgress());
         editor.putBoolean("force_pitch", switchForcePitch.isChecked());
-        editor.putBoolean("force_speech", switchForceSpeech.isChecked()); // नया टॉगल सेव किया
+        editor.putBoolean("force_speech", switchForceSpeech.isChecked());
         
         if (spinnerLanguage.getSelectedItem() != null && spinnerVoice.getSelectedItem() != null) {
             editor.putString("saved_lang", spinnerLanguage.getSelectedItem().toString());
@@ -218,7 +219,7 @@ public class HomeFragment extends Fragment {
         tvPitch.setText("Pitch Rate: " + seekbarPitch.getProgress() + "%");
         
         switchForcePitch.setChecked(prefs.getBoolean("force_pitch", false));
-        switchForceSpeech.setChecked(prefs.getBoolean("force_speech", false)); // नया टॉगल लोड किया
+        switchForceSpeech.setChecked(prefs.getBoolean("force_speech", false));
         
         spinnerNumber.setSelection(prefs.getInt("num_pos", 0));
         spinnerPunctuation.setSelection(prefs.getInt("punc_pos", 0));
@@ -233,7 +234,7 @@ public class HomeFragment extends Fragment {
         seekbarSpeechRate.setProgress(50);
         seekbarPitch.setProgress(50);
         switchForcePitch.setChecked(false);
-        switchForceSpeech.setChecked(false); // नया टॉगल रीसेट किया
+        switchForceSpeech.setChecked(false);
         if (spinnerLanguage.getCount() > 0) spinnerLanguage.setSelection(0);
         spinnerNumber.setSelection(0);
         spinnerPunctuation.setSelection(0);

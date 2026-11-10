@@ -1,6 +1,9 @@
 package com.itfb.dhwanitts;
 
 import android.content.Context;
+import android.media.AudioFormat;
+import android.media.AudioManager;
+import android.media.AudioTrack;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.LayoutInflater;
@@ -41,11 +44,16 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
         VoiceModel voice = voiceList.get(position);
         Context context = holder.itemView.getContext();
 
-        holder.tvVoiceName.setText(voice.getLanguage() + " - " + voice.getVoiceName());
-        holder.tvVoiceSize.setText(voice.getSize() + " MB");
+        // 1. फिक्स: नाम को दो बार जुड़ने से रोका गया
+        holder.tvVoiceName.setText(voice.getVoiceName());
+        holder.tvVoiceSize.setText(voice.getSize());
 
-        File voiceDir = new File(context.getExternalFilesDir(null), "piper_voices/" + voice.getVoiceName());
-        boolean isDownloaded = voiceDir.exists() && voiceDir.list() != null && voiceDir.list().length > 0;
+        // 2. फिक्स: सही फोल्डर पाथ (voices) जो HomeFragment और Service से मैच करता है
+        File voicesDir = new File(context.getFilesDir(), "voices");
+        File modelFile = new File(voicesDir, voice.getVoiceName() + ".onnx");
+        File configFile = new File(voicesDir, voice.getVoiceName() + ".onnx.json");
+        
+        boolean isDownloaded = modelFile.exists() && configFile.exists();
 
         if (isDownloaded) {
             holder.btnDownload.setVisibility(View.GONE);
@@ -57,16 +65,16 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
             holder.btnDownload.setEnabled(true);
         }
 
-        // Preview Logic
+        // 3. फिक्स: असली C++ प्रीव्यू लॉजिक
         holder.btnPreview.setOnClickListener(v -> {
             if (isDownloaded) {
-                Toast.makeText(context, "Testing " + voice.getVoiceName() + " (Select in TTS Settings to hear)", Toast.LENGTH_LONG).show();
+                Toast.makeText(context, "Playing preview...", Toast.LENGTH_SHORT).show();
+                playRealPreview(modelFile.getAbsolutePath(), configFile.getAbsolutePath(), voice.getVoiceName());
             } else {
-                Toast.makeText(context, "Please download the voice first to preview!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(context, "Please download the voice first!", Toast.LENGTH_SHORT).show();
             }
         });
 
-        // Download Logic (Now with Redirect Handling)
         holder.btnDownload.setOnClickListener(v -> {
             holder.btnDownload.setEnabled(false);
             holder.btnDownload.setText("Downloading...");
@@ -74,50 +82,53 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
         });
 
         holder.btnDelete.setOnClickListener(v -> {
-            if (voiceDir.exists()) {
-                for (File child : voiceDir.listFiles()) {
-                    child.delete();
-                }
-                voiceDir.delete();
-            }
-            Toast.makeText(context, voice.getVoiceName() + " Deleted!", Toast.LENGTH_SHORT).show();
+            if (modelFile.exists()) modelFile.delete();
+            if (configFile.exists()) configFile.delete();
+            Toast.makeText(context, "Deleted: " + voice.getVoiceName(), Toast.LENGTH_SHORT).show();
             notifyItemChanged(position);
+        });
+    }
+
+    private void playRealPreview(String modelPath, String configPath, String voiceName) {
+        executorService.execute(() -> {
+            try {
+                PiperEngine engine = new PiperEngine();
+                boolean isInit = engine.initEngine(modelPath, configPath);
+                if (isInit) {
+                    String text = "यह " + voiceName + " आवाज़ का असली प्रीव्यू है। This is a test preview.";
+                    byte[] audioData = engine.synthesizeText(text, 1.0f);
+                    if (audioData != null && audioData.length > 0) {
+                        AudioTrack audioTrack = new AudioTrack(
+                            AudioManager.STREAM_MUSIC,
+                            16000,
+                            AudioFormat.CHANNEL_OUT_MONO,
+                            AudioFormat.ENCODING_PCM_16BIT,
+                            audioData.length,
+                            AudioTrack.MODE_STATIC
+                        );
+                        audioTrack.write(audioData, 0, audioData.length);
+                        audioTrack.play();
+                    }
+                    engine.destroyEngine();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         });
     }
 
     private void downloadVoiceFile(Context context, VoiceModel voice, int position) {
         executorService.execute(() -> {
             try {
-                URL url = new URL(voice.getDownloadUrl());
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.setInstanceFollowRedirects(true);
-                
-                // Redirect handling (For GitHub / Hindi voice links)
-                int status = connection.getResponseCode();
-                if (status == HttpURLConnection.HTTP_MOVED_TEMP || 
-                    status == HttpURLConnection.HTTP_MOVED_PERM || 
-                    status == HttpURLConnection.HTTP_SEE_OTHER) {
-                    String newUrl = connection.getHeaderField("Location");
-                    connection = (HttpURLConnection) new URL(newUrl).openConnection();
-                }
+                File voicesDir = new File(context.getFilesDir(), "voices");
+                if (!voicesDir.exists()) voicesDir.mkdirs();
 
-                File dir = new File(context.getExternalFilesDir(null), "piper_voices/" + voice.getVoiceName());
-                if (!dir.exists()) dir.mkdirs();
-                
-                String fileName = voice.getVoiceName() + "_data.tar.gz"; 
-                File outputFile = new File(dir, fileName);
+                File modelFile = new File(voicesDir, voice.getVoiceName() + ".onnx");
+                File configFile = new File(voicesDir, voice.getVoiceName() + ".onnx.json");
 
-                InputStream input = connection.getInputStream();
-                FileOutputStream output = new FileOutputStream(outputFile);
-
-                byte[] data = new byte[4096];
-                int count;
-                while ((count = input.read(data)) != -1) {
-                    output.write(data, 0, count);
-                }
-                output.flush();
-                output.close();
-                input.close();
+                // 4. फिक्स: .onnx (मॉडल) फाइल और .json (कॉन्फिग) दोनों फाइलों को एक साथ डाउनलोड करना
+                downloadSingleFile(voice.getDownloadUrl(), modelFile);
+                downloadSingleFile(voice.getDownloadUrl() + ".json", configFile);
 
                 mainHandler.post(() -> {
                     Toast.makeText(context, "Download Complete: " + voice.getVoiceName(), Toast.LENGTH_SHORT).show();
@@ -127,11 +138,36 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
             } catch (Exception e) {
                 e.printStackTrace();
                 mainHandler.post(() -> {
-                    Toast.makeText(context, "Download Failed. Check Internet/URL.", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(context, "Download Failed. Check Internet.", Toast.LENGTH_SHORT).show();
                     notifyItemChanged(position);
                 });
             }
         });
+    }
+
+    private void downloadSingleFile(String fileUrl, File outputFile) throws Exception {
+        URL url = new URL(fileUrl);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setInstanceFollowRedirects(true);
+
+        int status = connection.getResponseCode();
+        if (status == HttpURLConnection.HTTP_MOVED_TEMP || 
+            status == HttpURLConnection.HTTP_MOVED_PERM || 
+            status == HttpURLConnection.HTTP_SEE_OTHER) {
+            String newUrl = connection.getHeaderField("Location");
+            connection = (HttpURLConnection) new URL(newUrl).openConnection();
+        }
+
+        InputStream input = connection.getInputStream();
+        FileOutputStream output = new FileOutputStream(outputFile);
+        byte[] data = new byte[4096];
+        int count;
+        while ((count = input.read(data)) != -1) {
+            output.write(data, 0, count);
+        }
+        output.flush();
+        output.close();
+        input.close();
     }
 
     @Override
