@@ -6,6 +6,33 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 
+# Ensure jniLibs arm64-v8a directory exists
+set(ONNX_SO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/arm64-v8a")
+set(ONNX_SO_PATH "${ONNX_SO_DIR}/libonnxruntime.so")
+
+if(NOT EXISTS "${ONNX_SO_PATH}")
+    file(MAKE_DIRECTORY "${ONNX_SO_DIR}")
+    message(STATUS "Downloading onnxruntime-android arm64-v8a 1.16.3...")
+    file(DOWNLOAD 
+        "https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/onnxruntime-android-arm64-v8a-1.16.3.aar"
+        "${CMAKE_CURRENT_SOURCE_DIR}/onnx_temp.aar"
+        TIMEOUT 120
+        STATUS DOWNLOAD_STATUS
+    )
+    list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
+    if(STATUS_CODE EQUAL 0)
+        execute_process(
+            COMMAND ${CMAKE_COMMAND} -E tar xf "${CMAKE_CURRENT_SOURCE_DIR}/onnx_temp.aar"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        )
+        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/jni/arm64-v8a/libonnxruntime.so")
+            file(RENAME "${CMAKE_CURRENT_SOURCE_DIR}/jni/arm64-v8a/libonnxruntime.so" "${ONNX_SO_PATH}")
+            message(STATUS "libonnxruntime.so successfully placed!")
+        endif()
+        file(REMOVE_RECURSE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_temp.aar" "${CMAKE_CURRENT_SOURCE_DIR}/jni" "${CMAKE_CURRENT_SOURCE_DIR}/Headers" "${CMAKE_CURRENT_SOURCE_DIR}/AndroidManifest.xml")
+    endif()
+endif()
+
 # Official espeak-ng source for 100+ languages, numbers, and punctuation phonemization
 FetchContent_Declare(
     espeak_ng
@@ -25,8 +52,6 @@ set(COMPILE_INTONATIONS OFF CACHE BOOL "" FORCE)
 set(COMPILE_DICT OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(espeak_ng)
-
-set(ONNX_SO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/arm64-v8a/libonnxruntime.so")
 
 add_library(onnxruntime SHARED IMPORTED)
 set_target_properties(onnxruntime PROPERTIES
