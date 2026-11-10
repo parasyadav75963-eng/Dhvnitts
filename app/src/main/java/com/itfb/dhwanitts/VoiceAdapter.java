@@ -28,9 +28,7 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
     private ExecutorService executorService = Executors.newFixedThreadPool(3);
     private Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    public VoiceAdapter(List<VoiceModel> voiceList) {
-        this.voiceList = voiceList;
-    }
+    public VoiceAdapter(List<VoiceModel> voiceList) { this.voiceList = voiceList; }
 
     @NonNull
     @Override
@@ -68,7 +66,7 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
                 Toast.makeText(context, "Playing preview...", Toast.LENGTH_SHORT).show();
                 playRealPreview(modelFile.getAbsolutePath(), configFile.getAbsolutePath(), voice.getVoiceName());
             } else {
-                Toast.makeText(context, "Please download the voice first!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(context, "Please download first!", Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -81,7 +79,7 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
         holder.btnDelete.setOnClickListener(v -> {
             if (modelFile.exists()) modelFile.delete();
             if (configFile.exists()) configFile.delete();
-            Toast.makeText(context, "Deleted: " + voice.getVoiceName(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(context, "Deleted", Toast.LENGTH_SHORT).show();
             notifyItemChanged(position);
         });
     }
@@ -90,16 +88,11 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
         executorService.execute(() -> {
             try {
                 PiperEngine engine = new PiperEngine();
-                boolean isInit = engine.initEngine(modelPath, configPath);
-                if (isInit) {
-                    String text = "यह " + voiceName + " आवाज़ का असली प्रीव्यू है। This is a test preview.";
+                if (engine.initEngine(modelPath, configPath)) {
+                    String text = "यह " + voiceName + " आवाज़ का असली प्रीव्यू है।";
                     byte[] audioData = engine.synthesizeText(text, 1.0f);
                     if (audioData != null && audioData.length > 0) {
-                        AudioTrack audioTrack = new AudioTrack(
-                            AudioManager.STREAM_MUSIC, 16000,
-                            AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT,
-                            audioData.length, AudioTrack.MODE_STATIC
-                        );
+                        AudioTrack audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, 16000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, audioData.length, AudioTrack.MODE_STATIC);
                         audioTrack.write(audioData, 0, audioData.length);
                         audioTrack.play();
                     }
@@ -114,7 +107,6 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
             try {
                 File voicesDir = new File(context.getFilesDir(), "voices");
                 if (!voicesDir.exists()) voicesDir.mkdirs();
-
                 File modelFile = new File(voicesDir, voice.getVoiceName() + ".onnx");
                 File configFile = new File(voicesDir, voice.getVoiceName() + ".onnx.json");
 
@@ -122,13 +114,12 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
                 downloadSingleFile(voice.getDownloadUrl() + ".json", configFile);
 
                 mainHandler.post(() -> {
-                    Toast.makeText(context, "Download Complete: " + voice.getVoiceName(), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(context, "Download Complete", Toast.LENGTH_SHORT).show();
                     notifyItemChanged(position);
                 });
-
             } catch (Exception e) {
                 mainHandler.post(() -> {
-                    Toast.makeText(context, "Download Failed. Check Internet.", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(context, "Download Failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                     notifyItemChanged(position);
                 });
             }
@@ -142,24 +133,31 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
         
         while (true) {
             connection = (HttpURLConnection) url.openConnection();
-            connection.setInstanceFollowRedirects(false);
-            int status = connection.getResponseCode();
+            connection.setInstanceFollowRedirects(false); // हम खुद redirects हैंडल करेंगे
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Android)");
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(15000);
             
-            if (status == HttpURLConnection.HTTP_MOVED_TEMP || status == HttpURLConnection.HTTP_MOVED_PERM || status == 307 || status == 308 || status == HttpURLConnection.HTTP_SEE_OTHER) {
+            int status = connection.getResponseCode();
+            if (status == HttpURLConnection.HTTP_MOVED_TEMP || 
+                status == HttpURLConnection.HTTP_MOVED_PERM || 
+                status == HttpURLConnection.HTTP_SEE_OTHER ||
+                status == 307 || status == 308) {
+                
                 String newUrl = connection.getHeaderField("Location");
-                url = new URL(newUrl);
+                url = new URL(url, newUrl); // Relative URL को भी फिक्स करेगा
                 redirects++;
-                if (redirects > 5) throw new Exception("Too many redirects");
+                if (redirects > 10) throw new Exception("Redirect Loop");
             } else if (status == HttpURLConnection.HTTP_OK) {
                 break;
             } else {
-                throw new Exception("HTTP Error");
+                throw new Exception("HTTP Error: " + status);
             }
         }
 
         InputStream input = connection.getInputStream();
         FileOutputStream output = new FileOutputStream(outputFile);
-        byte[] data = new byte[4096];
+        byte[] data = new byte[8192];
         int count;
         while ((count = input.read(data)) != -1) {
             output.write(data, 0, count);
@@ -168,20 +166,18 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
         output.close();
         input.close();
 
-        // 404 HTML फाइल सुरक्षा: अगर फाइल 50KB से छोटी है, तो वह 404 पेज है! उसे डिलीट करें।
-        if (!outputFile.getName().endsWith(".json") && outputFile.length() < 50000) {
+        // फाइल करप्ट होने पर सुरक्षा
+        if (outputFile.length() < 1024) {
             outputFile.delete();
-            throw new Exception("Invalid model file downloaded (404 HTML)");
+            throw new Exception("File Corrupt (Too Small)");
         }
     }
 
     @Override
     public int getItemCount() { return voiceList.size(); }
-
     public static class VoiceViewHolder extends RecyclerView.ViewHolder {
         TextView tvVoiceName, tvVoiceSize;
         Button btnDownload, btnDelete, btnPreview;
-
         public VoiceViewHolder(@NonNull View itemView) {
             super(itemView);
             tvVoiceName = itemView.findViewById(R.id.tv_voice_name);
