@@ -10,9 +10,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 public class PiperEngine {
-    private static final String TAG = "DhwaniTTS_PiperEngine";
+    private static final String TAG = "PiperEngine";
     private static boolean isLibraryLoaded = false;
-    private static String espeakDataPath = "";
 
     static {
         try {
@@ -24,86 +23,55 @@ public class PiperEngine {
         }
     }
 
-    public PiperEngine() {}
+    public static boolean isLoaded() { return isLibraryLoaded; }
 
-    public PiperEngine(Context context) {
-        if (context != null) {
-            setupEspeakData(context);
+    public static String setupEspeakData(Context context) {
+        File filesDir = context.getFilesDir();
+        File espeakDir = new File(filesDir, "espeak-ng-data");
+        File phontab = new File(espeakDir, "phontab");
+        File hiDict = new File(espeakDir, "hi_dict");
+        File enDict = new File(espeakDir, "en_dict");
+        if (!phontab.exists() || !hiDict.exists() || !enDict.exists()) {
+            copyAssetFolder(context.getAssets(), "espeak-ng-data", espeakDir.getAbsolutePath());
         }
+        return filesDir.getAbsolutePath();
     }
 
-    public static synchronized String setupEspeakData(Context context) {
-        if (context == null) return espeakDataPath;
-        File dataDir = new File(context.getFilesDir(), "espeak-ng-data");
-        if (!new File(dataDir, "phontab").exists()) {
-            copyAssetFolder(context.getAssets(), "espeak-ng-data", dataDir.getAbsolutePath());
-        }
-        espeakDataPath = dataDir.getAbsolutePath();
-        return espeakDataPath;
-    }
-
-    public boolean initialize(String modelPath, String configPath) {
-        if (!isLibraryLoaded) return false;
-        synchronized (PiperEngine.class) {
-            return nativeInit(modelPath, configPath, espeakDataPath);
-        }
-    }
-
-    public boolean init(String modelPath, String configPath) {
-        return initialize(modelPath, configPath);
-    }
-
-    public boolean initEngine(String modelPath, String configPath, String dataPath) {
-        if (!isLibraryLoaded) return false;
-        synchronized (PiperEngine.class) {
-            return nativeInit(modelPath, configPath, dataPath != null ? dataPath : espeakDataPath);
-        }
-    }
-
-    public byte[] synthesize(String text, float speed) {
-        if (!isLibraryLoaded || text == null || text.trim().isEmpty()) return new byte[0];
-        synchronized (PiperEngine.class) {
-            return nativeSynthesize(text, speed);
-        }
-    }
-
-    public byte[] synthesizeText(String text, float speed) {
-        return synthesize(text, speed);
-    }
-
-    public void destroy() {}
-
-    public void destroyEngine() {}
-
-    public static synchronized native boolean nativeInit(String modelPath, String configPath, String dataPath);
-    public static synchronized native byte[] nativeSynthesize(String text, float speed);
-    public static synchronized native void nativeDestroy();
-
-    private static void copyAssetFolder(AssetManager assetManager, String fromAssetPath, String toPath) {
+    private static boolean copyAssetFolder(AssetManager am, String src, String dst) {
         try {
-            String[] files = assetManager.list(fromAssetPath);
-            if (files == null) return;
-            new File(toPath).mkdirs();
-            for (String file : files) {
-                String[] subFiles = assetManager.list(fromAssetPath + "/" + file);
-                if (subFiles != null && subFiles.length > 0) {
-                    copyAssetFolder(assetManager, fromAssetPath + "/" + file, toPath + "/" + file);
-                } else {
-                    copyAsset(assetManager, fromAssetPath + "/" + file, toPath + "/" + file);
-                }
+            String[] files = am.list(src);
+            if (files == null) return false;
+            new File(dst).mkdirs();
+            boolean res = true;
+            for (String f : files) {
+                String sp = src + "/" + f, dp = dst + "/" + f;
+                String[] sub = am.list(sp);
+                if (sub != null && sub.length > 0) res &= copyAssetFolder(am, sp, dp);
+                else res &= copyAsset(am, sp, dp);
             }
-        } catch (Exception ignored) {}
+            return res;
+        } catch (Exception e) { return false; }
     }
 
-    private static void copyAsset(AssetManager assetManager, String fromAssetPath, String toPath) {
-        try (InputStream in = assetManager.open(fromAssetPath);
-             OutputStream out = new FileOutputStream(toPath)) {
-            byte[] buffer = new byte[8192];
-            int read;
-            while ((read = in.read(buffer)) != -1) {
-                out.write(buffer, 0, read);
-            }
-            out.flush();
-        } catch (IOException ignored) {}
+    private static boolean copyAsset(AssetManager am, String src, String dst) {
+        try (InputStream in = am.open(src); OutputStream out = new FileOutputStream(dst)) {
+            byte[] buf = new byte[8192]; int r;
+            while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
+            out.flush(); return true;
+        } catch (IOException e) { return false; }
     }
+
+    public static boolean init(Context context, String mPath, String cPath) {
+        if (!isLibraryLoaded) return false;
+        return nativeInit(mPath, cPath, setupEspeakData(context));
+    }
+
+    public static byte[] synthesize(String text, float speed) {
+        if (!isLibraryLoaded || text == null || text.trim().isEmpty()) return new byte[0];
+        return nativeSynthesize(text, speed);
+    }
+
+    public static native boolean nativeInit(String mPath, String cPath, String dPath);
+    public static native byte[] nativeSynthesize(String text, float speed);
+    public static native void nativeDestroy();
 }

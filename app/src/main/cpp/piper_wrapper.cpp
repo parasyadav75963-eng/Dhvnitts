@@ -5,19 +5,33 @@
 #include <fstream>
 #include <sstream>
 #include <mutex>
-#include <cctype>
+#include <sys/stat.h>
 #include <android/log.h>
 #include <onnxruntime_cxx_api.h>
+#include <espeak-ng/speak_lib.h>
 
-#define LOG_TAG "DhwaniTTS_PiperJNI"
-#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+extern "C" const char* espeak_TextToPhonemesWithTerminator(const void** textptr, int textmode, int phonememode, int* terminator);
+
+#define CLAUSE_PERIOD 0x00000028
+#define CLAUSE_COMMA  0x00000010
+#define CLAUSE_QUESTION 0x00000030
+#define CLAUSE_EXCLAMATION 0x00000038
+#define CLAUSE_COLON  0x00000018
+#define CLAUSE_SEMICOLON 0x00000020
+#define CLAUSE_TYPE_MASK 0x00000038
 
 Ort::Env* ortEnv = nullptr;
 Ort::Session* ortSession = nullptr;
 std::string currentModelPath = "";
+std::string currentVoiceLang = "en-us";
+float modelNoiseScale = 0.667f, modelLengthScale = 1.0f, modelNoiseW = 0.8f;
 std::map<std::string, int64_t> phonemeIdMap;
+bool isEspeakInitialized = false;
 std::mutex engineMutex;
+
+bool dirExists(const std::string& p) {
+    struct stat st; return (stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode));
+}
 
 std::vector<uint32_t> toCps(const std::string& s) {
     std::vector<uint32_t> cps;
@@ -57,12 +71,25 @@ std::string unescapeJson(const std::string& r) {
     return o;
 }
 
-void loadPhonemeIdMap(const char* configPath) {
+void parseModelConfig(const char* configPath) {
     phonemeIdMap.clear();
+    currentVoiceLang = "en-us";
     std::ifstream f(configPath);
     if (!f.is_open()) return;
     std::stringstream b; b << f.rdbuf();
     std::string j = b.str();
+
+    size_t espPos = j.find("\"espeak\"");
+    if (espPos != std::string::npos) {
+        size_t vPos = j.find("\"voice\"", espPos);
+        if (vPos != std::string::npos) {
+            size_t q1 = j.find("\"", vPos + 7);
+            size_t q2 = j.find("\"", q1 + 1);
+            if (q1 != std::string::npos && q2 != std::string::npos)
+                currentVoiceLang = j.substr(q1 + 1, q2 - q1 - 1);
+        }
+    }
+
     size_t mp = j.find("\"phoneme_id_map\"");
     if (mp == std::string::npos) return;
     size_t sb = j.find("{", mp);
@@ -84,93 +111,92 @@ void loadPhonemeIdMap(const char* configPath) {
     }
 }
 
-bool isIndic(uint32_t cp) { return (cp >= 0x0900 && cp <= 0x0D7F); }
-
-std::string textToIpa(const std::string& in) {
-    static const char* kCons[37] = {
-        "k","kʰ","ɡ","ɡʱ","ŋ","tʃ","tʃʰ","dʒ","dʒʱ","ɲ",
-        "ʈ","ʈʰ","ɖ","ɖʱ","ɳ","t̪","t̪ʰ","d̪","d̪ʱ","n",
-        "n","p","pʰ","b","bʱ","m","j","ɾ","ɾ","l",
-        "l","l","ʋ","ʃ","ʃ","s","ɦ"
-    };
-    std::vector<uint32_t> cps = toCps(in);
-    std::string ipa = ""; size_t n = cps.size();
-    for (size_t i = 0; i < n; ++i) {
-        uint32_t cp = cps[i];
-        if (isIndic(cp)) {
-            uint32_t off = cp & 0x7F;
-            if (off == 0x01 || off == 0x02) { ipa += "n"; continue; }
-            if (off == 0x03) { ipa += "h"; continue; }
-            if (off == 0x05) { ipa += "ə"; continue; }
-            if (off == 0x06 || off == 0x3E) { ipa += "aː"; continue; }
-            if (off == 0x07 || off == 0x3F) { ipa += "ɪ"; continue; }
-            if (off == 0x08 || off == 0x40) { ipa += "iː"; continue; }
-            if (off == 0x09 || off == 0x41) { ipa += "ʊ"; continue; }
-            if (off == 0x0A || off == 0x42) { ipa += "uː"; continue; }
-            if (off == 0x0B || off == 0x43) { ipa += "ɾɪ"; continue; }
-            if ((off >= 0x0D && off <= 0x0F) || (off >= 0x45 && off <= 0x47)) { ipa += "eː"; continue; }
-            if (off == 0x10 || off == 0x48) { ipa += "ɛː"; continue; }
-            if ((off >= 0x11 && off <= 0x13) || (off >= 0x49 && off <= 0x4B)) { ipa += "oː"; continue; }
-            if (off == 0x14 || off == 0x4C) { ipa += "ɔː"; continue; }
-            if (off >= 0x15 && off <= 0x39) {
-                std::string cStr = kCons[off - 0x15];
-                if (i + 1 < n && isIndic(cps[i + 1]) && ((cps[i + 1] & 0x7F) == 0x3C)) {
-                    if (off == 0x1C) cStr = "z"; else if (off == 0x2B) cStr = "f"; else if (off == 0x21) cStr = "ɽ";
-                    i++;
-                }
-                ipa += cStr;
-                if (i + 1 < n && isIndic(cps[i + 1])) {
-                    uint32_t no = cps[i + 1] & 0x7F;
-                    if (no == 0x4D) i++;
-                    else if (no < 0x3E || no > 0x4C) ipa += "ə";
-                }
-                continue;
-            }
-            continue;
-        }
-        if (cp < 128) {
-            char c = std::tolower((unsigned char)cp);
-            char nx = (i + 1 < n && cps[i + 1] < 128) ? std::tolower((unsigned char)cps[i + 1]) : 0;
-            if (c == 's' && nx == 'h') { ipa += "ʃ"; i++; continue; }
-            if (c == 'c' && nx == 'h') { ipa += "tʃ"; i++; continue; }
-            if (c == 't' && nx == 'h') { ipa += "ð"; i++; continue; }
-            if (c == 'p' && nx == 'h') { ipa += "f"; i++; continue; }
-            if (c == 'e' && nx == 'e') { ipa += "iː"; i++; continue; }
-            if (c == 'o' && nx == 'o') { ipa += "uː"; i++; continue; }
-            if (c == 'a') ipa += "ə"; else if (c == 'e') ipa += "ɛ"; else if (c == 'i') ipa += "ɪ";
-            else if (c == 'o') ipa += "oː"; else if (c == 'u') ipa += "ʊ"; else if (c == 'r') ipa += "ɹ";
-            else if (c == 'c') ipa += (nx == 'e' || nx == 'i') ? "s" : "k";
-            else if (c == 'j') ipa += "dʒ"; else if (c == 'y') ipa += "j"; else if (c == 'g') ipa += "ɡ";
-            else if ((c >= 'a' && c <= 'z') || c == ' ') ipa += c;
-            continue;
-        }
-        ipa += fromCp(cp);
+std::string cleanEspeakFlags(const std::string& rawIpa) {
+    std::string out; bool inP = false;
+    for (char c : rawIpa) {
+        if (c == '(') { inP = true; continue; }
+        if (c == ')') { inP = false; continue; }
+        if (!inP) out += c;
     }
-    return ipa;
+    return out;
+}
+
+std::string normalizeInputText(const std::string& s) {
+    std::string out;
+    for (uint32_t cp : toCps(s)) {
+        if (cp == 0x0964 || cp == 0x0965) out += ". ";
+        else out += fromCp(cp);
+    }
+    return out;
+}
+
+std::vector<std::string> phonemizeToClauses(const std::string& rawText) {
+    std::vector<std::string> clauses;
+    if (!isEspeakInitialized) return clauses;
+    std::string normText = normalizeInputText(rawText);
+
+    bool hasDeva = false;
+    for (uint32_t cp : toCps(normText)) {
+        if (cp >= 0x0900 && cp <= 0x097F) { hasDeva = true; break; }
+    }
+    if (hasDeva && currentVoiceLang.find("en") == 0) espeak_SetVoiceByName("hi");
+    else if (espeak_SetVoiceByName(currentVoiceLang.c_str()) != EE_OK) espeak_SetVoiceByName("en-us");
+
+    const char* inputPtr = normText.c_str();
+    int mode = espeakCHARS_UTF8 | (1 << 1);
+    while (inputPtr != nullptr && *inputPtr != '\0') {
+        int term = 0;
+        const char* ph = espeak_TextToPhonemesWithTerminator((const void**)&inputPtr, espeakCHARS_UTF8, mode, &term);
+        std::string ipa = (ph && *ph) ? cleanEspeakFlags(std::string(ph)) : "";
+        int pt = term & CLAUSE_TYPE_MASK;
+        if (pt == CLAUSE_PERIOD) ipa += ".";
+        else if (pt == CLAUSE_QUESTION) ipa += "?";
+        else if (pt == CLAUSE_EXCLAMATION) ipa += "!";
+        else if (pt == CLAUSE_COMMA) ipa += ", ";
+        else if (pt == CLAUSE_COLON) ipa += ": ";
+        else if (pt == CLAUSE_SEMICOLON) ipa += "; ";
+        if (!ipa.empty()) clauses.push_back(ipa);
+    }
+    espeak_SetVoiceByName(currentVoiceLang.c_str());
+    return clauses;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_itfb_dhwanitts_PiperEngine_nativeInit(JNIEnv* env, jclass, jstring mPath, jstring cPath, jstring) {
+Java_com_itfb_dhwanitts_PiperEngine_nativeInit(JNIEnv* env, jclass, jstring mPath, jstring cPath, jstring dPath) {
     std::lock_guard<std::mutex> lk(engineMutex);
     const char* m = env->GetStringUTFChars(mPath, nullptr);
     const char* c = env->GetStringUTFChars(cPath, nullptr);
+    const char* d = env->GetStringUTFChars(dPath, nullptr);
+
+    if (!isEspeakInitialized && d != nullptr && strlen(d) > 0) {
+        std::string root(d);
+        if (!dirExists(root + "/espeak-ng-data") && dirExists(root + "/phontab")) {
+            size_t sl = root.find_last_of('/');
+            if (sl != std::string::npos) root = root.substr(0, sl);
+        }
+        if (espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, root.c_str(), 0) > 0) isEspeakInitialized = true;
+    }
+
     if (ortSession && currentModelPath == m) {
-        env->ReleaseStringUTFChars(mPath, m); env->ReleaseStringUTFChars(cPath, c);
+        if (isEspeakInitialized) espeak_SetVoiceByName(currentVoiceLang.c_str());
+        env->ReleaseStringUTFChars(mPath, m); env->ReleaseStringUTFChars(cPath, c); env->ReleaseStringUTFChars(dPath, d);
         return JNI_TRUE;
     }
+
     try {
         if (!ortEnv) ortEnv = new Ort::Env(ORT_LOGGING_LEVEL_WARNING, "DhwaniTTS");
         delete ortSession; ortSession = nullptr;
-        Ort::SessionOptions opts; opts.SetIntraOpNumThreads(2);
-        opts.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_BASIC);
+        Ort::SessionOptions opts; opts.SetIntraOpNumThreads(4);
+        opts.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
         ortSession = new Ort::Session(*ortEnv, m, opts);
         currentModelPath = m;
-        loadPhonemeIdMap(c);
+        parseModelConfig(c);
+        if (isEspeakInitialized) espeak_SetVoiceByName(currentVoiceLang.c_str());
     } catch (...) {
-        env->ReleaseStringUTFChars(mPath, m); env->ReleaseStringUTFChars(cPath, c);
+        env->ReleaseStringUTFChars(mPath, m); env->ReleaseStringUTFChars(cPath, c); env->ReleaseStringUTFChars(dPath, d);
         return JNI_FALSE;
     }
-    env->ReleaseStringUTFChars(mPath, m); env->ReleaseStringUTFChars(cPath, c);
+    env->ReleaseStringUTFChars(mPath, m); env->ReleaseStringUTFChars(cPath, c); env->ReleaseStringUTFChars(dPath, d);
     return JNI_TRUE;
 }
 
@@ -181,26 +207,30 @@ Java_com_itfb_dhwanitts_PiperEngine_nativeSynthesize(JNIEnv* env, jclass, jstrin
     std::string inStr(nt ? nt : "");
     env->ReleaseStringUTFChars(text, nt);
     if (!ortSession || inStr.empty()) return env->NewByteArray(0);
+
     try {
-        std::vector<uint32_t> cps = toCps(textToIpa(inStr));
+        std::vector<std::string> clauses = phonemizeToClauses(inStr);
+        if (clauses.empty()) return env->NewByteArray(0);
         int64_t bos = phonemeIdMap.count("^") ? phonemeIdMap["^"] : 1;
         int64_t eos = phonemeIdMap.count("$") ? phonemeIdMap["$"] : 2;
         int64_t pad = phonemeIdMap.count("_") ? phonemeIdMap["_"] : 0;
-        int64_t spc = phonemeIdMap.count(" ") ? phonemeIdMap[" "] : 3;
+
         std::vector<int64_t> ids = {bos, pad};
-        for (uint32_t cp : cps) {
-            std::string s = fromCp(cp);
-            if (phonemeIdMap.count(s)) { ids.push_back(phonemeIdMap[s]); ids.push_back(pad); }
-            else if (s == " ") { ids.push_back(spc); ids.push_back(pad); }
-            else if (s == "ɡ" && phonemeIdMap.count("g")) { ids.push_back(phonemeIdMap["g"]); ids.push_back(pad); }
-            else if ((s == "ɾ" || s == "ɹ") && phonemeIdMap.count("r")) { ids.push_back(phonemeIdMap["r"]); ids.push_back(pad); }
-            else if (s == "ʋ" && phonemeIdMap.count("v")) { ids.push_back(phonemeIdMap["v"]); ids.push_back(pad); }
-            else if (s == "ɦ" && phonemeIdMap.count("h")) { ids.push_back(phonemeIdMap["h"]); ids.push_back(pad); }
+        for (size_t cIdx = 0; cIdx < clauses.size(); ++cIdx) {
+            for (uint32_t cp : toCps(clauses[cIdx])) {
+                std::string s = fromCp(cp);
+                if (phonemeIdMap.count(s)) { ids.push_back(phonemeIdMap[s]); ids.push_back(pad); }
+            }
+            if (cIdx + 1 < clauses.size() && phonemeIdMap.count(" ")) {
+                ids.push_back(phonemeIdMap[" "]); ids.push_back(pad);
+            }
         }
         ids.push_back(eos);
+        if (ids.size() <= 3) return env->NewByteArray(0);
+
         auto mem = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
         int64_t inShape[] = {1, (int64_t)ids.size()}, lenData[] = {(int64_t)ids.size()}, lenShape[] = {1}, scShape[] = {3};
-        float scData[] = {0.667f, 1.0f / (speed > 0.1f ? speed : 1.0f), 0.8f};
+        float scData[] = {modelNoiseScale, modelLengthScale / (speed > 0.1f ? speed : 1.0f), modelNoiseW};
         std::vector<const char*> inNames = {"input", "input_lengths", "scales"};
         std::vector<Ort::Value> inTensors;
         inTensors.push_back(Ort::Value::CreateTensor<int64_t>(mem, ids.data(), ids.size(), inShape, 2));
@@ -228,7 +258,4 @@ Java_com_itfb_dhwanitts_PiperEngine_nativeSynthesize(JNIEnv* env, jclass, jstrin
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_itfb_dhwanitts_PiperEngine_nativeDestroy(JNIEnv*, jclass) {
-    std::lock_guard<std::mutex> lk(engineMutex);
-    delete ortSession; ortSession = nullptr; currentModelPath = "";
-}
+Java_com_itfb_dhwanitts_PiperEngine_nativeDestroy(JNIEnv*, jclass) {}
