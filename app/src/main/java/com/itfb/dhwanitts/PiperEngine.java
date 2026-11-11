@@ -31,7 +31,9 @@ public class PiperEngine {
         File phontab = new File(espeakDir, "phontab");
         File hiDict = new File(espeakDir, "hi_dict");
         File enDict = new File(espeakDir, "en_dict");
-        if (!phontab.exists() || !hiDict.exists() || !enDict.exists()) {
+        File langDir = new File(espeakDir, "lang");
+
+        if (!phontab.exists() || !hiDict.exists() || !enDict.exists() || !langDir.exists()) {
             copyAssetFolder(context.getAssets(), "espeak-ng-data", espeakDir.getAbsolutePath());
         }
         return filesDir.getAbsolutePath();
