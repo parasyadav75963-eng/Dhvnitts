@@ -12,6 +12,7 @@ import java.io.OutputStream;
 public class PiperEngine {
     private static final String TAG = "PiperEngine";
     private static boolean isLibraryLoaded = false;
+    private Context appContext;
 
     static {
         try {
@@ -23,9 +24,21 @@ public class PiperEngine {
         }
     }
 
-    public static boolean isLoaded() { return isLibraryLoaded; }
+    public PiperEngine() {}
+
+    public PiperEngine(Context context) {
+        if (context != null) {
+            this.appContext = context.getApplicationContext();
+            setupEspeakData(this.appContext);
+        }
+    }
+
+    public static boolean isLoaded() {
+        return isLibraryLoaded;
+    }
 
     public static String setupEspeakData(Context context) {
+        if (context == null) return "";
         File filesDir = context.getFilesDir();
         File espeakDir = new File(filesDir, "espeak-ng-data");
         File phontab = new File(espeakDir, "phontab");
@@ -63,14 +76,48 @@ public class PiperEngine {
         } catch (IOException e) { return false; }
     }
 
+    // Support both static and instance calls used across TtsService, PiperAudioPlayer, and MainActivity
     public static boolean init(Context context, String mPath, String cPath) {
         if (!isLibraryLoaded) return false;
         return nativeInit(mPath, cPath, setupEspeakData(context));
     }
 
+    public boolean initEngine(String mPath, String cPath) {
+        if (!isLibraryLoaded) return false;
+        String dPath = (appContext != null) ? setupEspeakData(appContext) : "";
+        return nativeInit(mPath, cPath, dPath);
+    }
+
+    public boolean initEngine(Context context, String mPath, String cPath) {
+        if (!isLibraryLoaded) return false;
+        return nativeInit(mPath, cPath, setupEspeakData(context));
+    }
+
+    public boolean initEngine(String mPath, String cPath, String dPath) {
+        if (!isLibraryLoaded) return false;
+        return nativeInit(mPath, cPath, dPath);
+    }
+
     public static byte[] synthesize(String text, float speed) {
         if (!isLibraryLoaded || text == null || text.trim().isEmpty()) return new byte[0];
         return nativeSynthesize(text, speed);
+    }
+
+    public byte[] synthesizeText(String text, float speed) {
+        if (!isLibraryLoaded || text == null || text.trim().isEmpty()) return new byte[0];
+        return nativeSynthesize(text, speed);
+    }
+
+    public byte[] synthesizeText(String text) {
+        return synthesizeText(text, 1.0f);
+    }
+
+    public void destroyEngine() {
+        if (isLibraryLoaded) nativeDestroy();
+    }
+
+    public static void destroy() {
+        if (isLibraryLoaded) nativeDestroy();
     }
 
     public static native boolean nativeInit(String mPath, String cPath, String dPath);
