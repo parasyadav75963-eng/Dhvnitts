@@ -407,7 +407,6 @@ public class HomeFragment extends Fragment {
         spinnerNumber.setSelection(0, false);
         spinnerPunctuation.setSelection(0, false);
         saveSettings();
-        Toast.makeText(getContext(), "Reset to Default!
-", Toast.LENGTH_SHORT).show();
+        Toast.makeText(getContext(), "Reset to Default!", Toast.LENGTH_SHORT).show();
     }
 }
