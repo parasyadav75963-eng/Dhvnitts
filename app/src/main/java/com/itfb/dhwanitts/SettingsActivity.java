@@ -20,6 +20,9 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.text.SimpleDateFormat;
+import java.util.Locale;
+import java.util.TimeZone;
 
 public class SettingsActivity extends AppCompatActivity {
 
@@ -84,7 +87,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void checkForGitHubUpdate() {
-        Toast.makeText(this, "Checking GitHub for updates...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Checking for updates...", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             try {
                 URL url = new URL("https://api.github.com/repos/parasyadav75963-eng/Dhvnitts/commits/main");
@@ -99,22 +102,43 @@ public class SettingsActivity extends AppCompatActivity {
 
                 JSONObject json = new JSONObject(sb.toString());
                 String latestSha = json.getString("sha").substring(0, 7);
-                String commitMsg = json.getJSONObject("commit").getString("message");
+                JSONObject commitObj = json.getJSONObject("commit");
+                String commitMsg = commitObj.getString("message");
+                String commitDateStr = commitObj.getJSONObject("committer").getString("date");
+
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
+                sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+                long commitTimeMs = sdf.parse(commitDateStr).getTime();
+                long apkTimeMs = getPackageManager().getPackageInfo(getPackageName(), 0).lastUpdateTime;
+
                 String savedSha = prefs.getString("installed_commit_sha", "");
+                boolean isLatest = latestSha.equals(savedSha) || (apkTimeMs >= (commitTimeMs - 120000));
+                if (isLatest) {
+                    prefs.edit().putString("installed_commit_sha", latestSha).apply();
+                }
 
                 runOnUiThread(() -> {
-                    new AlertDialog.Builder(this)
-                            .setTitle("Latest Build: " + latestSha)
-                            .setMessage("What's New:\n" + commitMsg + "\n\nWould you like to open GitHub Actions / Releases to download the latest APK?")
-                            .setPositiveButton("Download Latest APK", (d, w) -> {
-                                prefs.edit().putString("installed_commit_sha", latestSha).apply();
-                                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/parasyadav75963-eng/Dhvnitts/actions")));
-                            })
-                            .setNegativeButton("Later", null)
-                            .show();
+                    if (isLatest) {
+                        Toast.makeText(this, "Latest update is already installed!", Toast.LENGTH_LONG).show();
+                        new AlertDialog.Builder(this)
+                                .setTitle("Up to Date")
+                                .setMessage("Latest update is already installed (" + latestSha + ").")
+                                .setPositiveButton("OK", null)
+                                .show();
+                    } else {
+                        new AlertDialog.Builder(this)
+                                .setTitle("New Update Available (" + latestSha + ")")
+                                .setMessage("What's New:\n" + commitMsg + "\n\nDownload the latest APK from GitHub?")
+                                .setPositiveButton("Download Latest APK", (d, w) -> {
+                                    prefs.edit().putString("installed_commit_sha", latestSha).apply();
+                                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/parasyadav75963-eng/Dhvnitts/actions")));
+                                })
+                                .setNegativeButton("Cancel", null)
+                                .show();
+                    }
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this, "Could not check update. Please check internet connection.", Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> Toast.makeText(this, "Update check failed. Check internet connection.", Toast.LENGTH_SHORT).show());
             }
         }).start();
     }

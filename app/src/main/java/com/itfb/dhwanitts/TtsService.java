@@ -15,14 +15,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class TtsService extends TextToSpeechService {
-    private static final String TAG = "DhwaniTtsService";
+    private static final String TAG = "DhwaniTTS_Service";
     private PiperEngine piperEngine;
     private SharedPreferences prefs;
     private String currentLoadedModel = "";
 
     private static class Segment {
         String text;
-        int type; // 0 = Primary, 1 = Secondary (Latin/English), 2 = Number
+        int type; // 0 = Primary, 1 = Secondary (English), 2 = Number
         Segment(String t, int ty) { text = t; type = ty; }
     }
 
@@ -74,9 +74,7 @@ public class TtsService extends TextToSpeechService {
         if (numMode == 1) {
             out = out.replaceAll("(\\d)", "$1 ");
         }
-        if (puncMode == 0) {
-            out = out.replaceAll("[_\\-*#~^`|<>=+]", " ");
-        } else if (puncMode == 2) {
+        if (puncMode == 2) {
             out = out.replace("@", " at ").replace("#", " hash ").replace("$", " dollar ")
                      .replace("%", " percent ").replace("&", " and ").replace("*", " star ")
                      .replace("+", " plus ").replace("=", " equals ").replace("/", " slash ");
@@ -86,7 +84,7 @@ public class TtsService extends TextToSpeechService {
                      .replace("@", " at ").replace("#", " hash ").replace("$", " dollar ")
                      .replace("%", " percent ").replace("&", " and ").replace("*", " star ")
                      .replace("+", " plus ").replace("-", " minus ").replace("=", " equals ")
-                     .replace("/", " slash ").replace("\\", " backslash ").replace("_", " underscore ");
+                     .replace("/", " slash ").replace("_", " underscore ");
         }
         return out;
     }
@@ -94,6 +92,10 @@ public class TtsService extends TextToSpeechService {
     private List<Segment> splitSegments(String text, int engineMode, boolean hasSecVoice, boolean hasNumVoice) {
         List<Segment> list = new ArrayList<>();
         if (text.isEmpty()) return list;
+        if (engineMode == 0 && !hasNumVoice) {
+            list.add(new Segment(text, 0));
+            return list;
+        }
         int curType = -1;
         StringBuilder sb = new StringBuilder();
 
@@ -123,23 +125,17 @@ public class TtsService extends TextToSpeechService {
         return list;
     }
 
-    private byte[] applyPitchAndVolume(byte[] pcmBytes, float pitchFactor, float boostFactor) {
-        if (pcmBytes == null || pcmBytes.length < 2) return pcmBytes;
-        int totalSamples = pcmBytes.length / 2;
-        if (Math.abs(pitchFactor - 1.0f) < 0.03f && Math.abs(boostFactor - 1.0f) < 0.03f) {
+    private byte[] applyPitchShift(byte[] pcmBytes, float pitchFactor) {
+        if (pcmBytes == null || pcmBytes.length < 4 || Math.abs(pitchFactor - 1.0f) < 0.04f) {
             return pcmBytes;
         }
-        int outSamples = (Math.abs(pitchFactor - 1.0f) >= 0.03f) ? Math.max(1, (int) (totalSamples / pitchFactor)) : totalSamples;
+        int totalSamples = pcmBytes.length / 2;
+        int outSamples = Math.max(1, (int) (totalSamples / pitchFactor));
         byte[] outBytes = new byte[outSamples * 2];
-
         for (int i = 0; i < outSamples; i++) {
-            int srcIdx = (Math.abs(pitchFactor - 1.0f) >= 0.03f) ? Math.min(totalSamples - 1, (int) (i * pitchFactor)) : i;
-            short sample = (short) ((pcmBytes[srcIdx * 2] & 0xFF) | (pcmBytes[srcIdx * 2 + 1] << 8));
-            int boosted = (int) (sample * boostFactor);
-            if (boosted > 32767) boosted = 32767;
-            if (boosted < -32768) boosted = -32768;
-            outBytes[i * 2] = (byte) (boosted & 0xFF);
-            outBytes[i * 2 + 1] = (byte) ((boosted >> 8) & 0xFF);
+            int srcIdx = Math.min(totalSamples - 1, (int) (i * pitchFactor));
+            outBytes[i * 2] = pcmBytes[srcIdx * 2];
+            outBytes[i * 2 + 1] = pcmBytes[srcIdx * 2 + 1];
         }
         return outBytes;
     }
@@ -152,74 +148,78 @@ public class TtsService extends TextToSpeechService {
             return;
         }
 
-        int numMode = prefs.getInt("num_pos", 0);
-        int puncMode = prefs.getInt("punc_pos", 0);
-        String processedText = applyNumberAndPunctuationRules(cs.toString(), numMode, puncMode);
+        synchronized (PiperEngine.class) {
+            String savedVoiceKey = prefs.getString("saved_voice_key", "");
+            String priModel = resolveModelPath(savedVoiceKey);
+            if (priModel.isEmpty()) priModel = resolveModelPath(prefs.getString("saved_model_path", ""));
+            if (priModel.isEmpty()) priModel = getFallbackModel();
 
-        String priModel = resolveModelPath(prefs.getString("saved_model_path", prefs.getString("saved_voice_key", "")));
-        if (priModel.isEmpty()) priModel = getFallbackModel();
-        if (priModel.isEmpty()) {
-            callback.error();
-            return;
-        }
-        String priConfig = priModel + ".json";
+            if (priModel.isEmpty() || !new File(priModel).exists()) {
+                callback.error();
+                return;
+            }
 
-        String secModel = resolveModelPath(prefs.getString("sec_model_path", prefs.getString("sec_voice_key", "")));
-        String numModel = resolveModelPath(prefs.getString("num_model_path", prefs.getString("num_voice_key", "")));
+            String secModel = resolveModelPath(prefs.getString("sec_voice_key", prefs.getString("sec_model_path", "")));
+            String numModel = resolveModelPath(prefs.getString("num_voice_key", prefs.getString("num_model_path", "")));
+            int engineMode = prefs.getInt("engine_mode", 0);
+            boolean hasSec = !secModel.isEmpty() && !secModel.equals(priModel);
+            boolean hasNum = !numModel.isEmpty() && !numModel.equals(priModel);
 
-        int engineMode = prefs.getInt("engine_mode", 0);
-        boolean hasSec = !secModel.isEmpty() && !secModel.equals(priModel);
-        boolean hasNum = !numModel.isEmpty() && !numModel.equals(priModel);
+            int numMode = prefs.getInt("num_pos", 0);
+            int puncMode = prefs.getInt("punc_pos", 0);
+            String processedText = applyNumberAndPunctuationRules(cs.toString(), numMode, puncMode);
 
-        boolean forceSpeech = prefs.getBoolean("force_speech", false);
-        float baseSpeed = forceSpeech ? (prefs.getInt("speech_rate", 50) / 50.0f) : (request.getSpeechRate() / 100.0f);
-        if (baseSpeed < 0.2f) baseSpeed = 0.2f;
-        if (baseSpeed > 4.0f) baseSpeed = 4.0f;
+            boolean forceSpeech = prefs.getBoolean("force_speech", false);
+            float baseSpeed = forceSpeech ? (prefs.getInt("speech_rate", 50) / 50.0f) : (request.getSpeechRate() / 100.0f);
+            if (baseSpeed < 0.2f) baseSpeed = 0.2f;
+            if (baseSpeed > 4.0f) baseSpeed = 4.0f;
 
-        boolean forcePitch = prefs.getBoolean("force_pitch", false);
-        float pitchFactor = forcePitch ? (0.5f + (prefs.getInt("pitch_rate", 50) / 100.0f)) : (request.getPitch() / 100.0f);
-        if (pitchFactor < 0.5f) pitchFactor = 0.5f;
-        if (pitchFactor > 2.0f) pitchFactor = 2.0f;
+            boolean forcePitch = prefs.getBoolean("force_pitch", false);
+            float pitchFactor = forcePitch ? (0.5f + (prefs.getInt("pitch_rate", 50) / 100.0f)) : (request.getPitch() / 100.0f);
+            if (pitchFactor < 0.5f) pitchFactor = 0.5f;
+            if (pitchFactor > 2.0f) pitchFactor = 2.0f;
 
-        float speedForPiper = baseSpeed / pitchFactor;
-        float volumeBoost = prefs.getInt("volume_boost", 100) / 100.0f;
+            float speedForPiper = baseSpeed / pitchFactor;
+            String espeakDataPath = PiperEngine.setupEspeakData(this);
 
-        List<Segment> segments = splitSegments(processedText, engineMode, hasSec, hasNum);
-        callback.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1);
+            List<Segment> segments = splitSegments(processedText, engineMode, hasSec, hasNum);
+            callback.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1);
 
-        ByteArrayOutputStream fullAudio = new ByteArrayOutputStream();
-        for (Segment seg : segments) {
-            if (seg.text.trim().isEmpty()) continue;
-            String targetModel = priModel;
-            if (seg.type == 1 && hasSec) targetModel = secModel;
-            else if (seg.type == 2 && hasNum) targetModel = numModel;
-            String targetConfig = targetModel + ".json";
+            ByteArrayOutputStream fullAudio = new ByteArrayOutputStream();
+            for (Segment seg : segments) {
+                if (seg.text.trim().isEmpty()) continue;
+                String targetModel = priModel;
+                if (seg.type == 1 && hasSec) targetModel = secModel;
+                else if (seg.type == 2 && hasNum) targetModel = numModel;
+                String targetConfig = targetModel + ".json";
 
-            if (!currentLoadedModel.equals(targetModel)) {
-                if (piperEngine.initEngine(targetModel, targetConfig, getFilesDir().getAbsolutePath())) {
-                    currentLoadedModel = targetModel;
-                } else {
-                    continue;
+                if (!currentLoadedModel.equals(targetModel)) {
+                    if (piperEngine.initEngine(targetModel, targetConfig, espeakDataPath)) {
+                        currentLoadedModel = targetModel;
+                    } else if (!targetModel.equals(priModel) && piperEngine.initEngine(priModel, priModel + ".json", espeakDataPath)) {
+                        currentLoadedModel = priModel;
+                    } else {
+                        continue;
+                    }
+                }
+                byte[] chunk = piperEngine.synthesizeText(seg.text, speedForPiper);
+                if (chunk != null && chunk.length > 0) {
+                    byte[] pitched = applyPitchShift(chunk, pitchFactor);
+                    try { fullAudio.write(pitched); } catch (Exception ignored) {}
                 }
             }
-            byte[] rawChunk = piperEngine.synthesizeText(seg.text, speedForPiper);
-            if (rawChunk != null && rawChunk.length > 0) {
-                byte[] finalChunk = applyPitchAndVolume(rawChunk, pitchFactor, volumeBoost);
-                try { fullAudio.write(finalChunk); } catch (Exception ignored) {}
-            }
-        }
 
-        byte[] audioData = fullAudio.toByteArray();
-        if (audioData.length > 0) {
-            int maxBuf = callback.getMaxBufferSize();
+            byte[] audioData = fullAudio.toByteArray();
+            if (audioData.length == 0) {
+                audioData = new byte[440];
+            }
+            int maxBufferSize = callback.getMaxBufferSize();
             int offset = 0;
             while (offset < audioData.length) {
-                int len = Math.min(maxBuf, audioData.length - offset);
-                callback.audioAvailable(audioData, offset, len);
-                offset += len;
+                int bytesToWrite = Math.min(maxBufferSize, audioData.length - offset);
+                callback.audioAvailable(audioData, offset, bytesToWrite);
+                offset += bytesToWrite;
             }
-            callback.done();
-        } else {
             callback.done();
         }
     }
