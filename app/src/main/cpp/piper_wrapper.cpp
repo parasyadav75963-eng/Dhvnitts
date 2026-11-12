@@ -25,7 +25,7 @@ Ort::Session* ortSession = nullptr;
 std::string currentModelPath = "";
 std::string currentVoiceLang = "en-us";
 float modelNoiseScale = 0.667f, modelLengthScale = 1.0f, modelNoiseW = 0.8f;
-std::map<std::string, int64_t> phonemeIdMap;
+std::map<std::string, std::vector<int64_t>> phonemeIdMap;
 bool isEspeakInitialized = false;
 std::mutex engineMutex;
 
@@ -62,6 +62,8 @@ std::string unescapeJson(const std::string& r) {
         if (r[i] == '\\' && i + 1 < r.size()) {
             char n = r[i + 1];
             if (n == '"' || n == '\\' || n == '/') { o += n; i++; }
+            else if (n == 'n') { o += '\n'; i++; }
+            else if (n == 't') { o += '\t'; i++; }
             else if (n == 'u' && i + 5 < r.size()) {
                 try { o += fromCp(std::stoul(r.substr(i + 2, 4), nullptr, 16)); i += 5; }
                 catch (...) { o += r[i]; }
@@ -69,6 +71,18 @@ std::string unescapeJson(const std::string& r) {
         } else o += r[i];
     }
     return o;
+}
+
+float extractFloatConfig(const std::string& j, const std::string& key, float defVal) {
+    size_t pos = j.find("\"" + key + "\"");
+    if (pos == std::string::npos) return defVal;
+    size_t col = j.find(":", pos);
+    if (col == std::string::npos) return defVal;
+    size_t start = col + 1;
+    while (start < j.size() && (j[start] == ' ' || j[start] == '\t' || j[start] == '\n')) start++;
+    size_t end = start;
+    while (end < j.size() && ((j[end] >= '0' && j[end] <= '9') || j[end] == '.' || j[end] == '-')) end++;
+    try { return std::stof(j.substr(start, end - start)); } catch (...) { return defVal; }
 }
 
 void parseModelConfig(const char* configPath) {
@@ -90,6 +104,10 @@ void parseModelConfig(const char* configPath) {
         }
     }
 
+    modelNoiseScale = extractFloatConfig(j, "noise_scale", 0.667f);
+    modelLengthScale = extractFloatConfig(j, "length_scale", 1.0f);
+    modelNoiseW = extractFloatConfig(j, "noise_w", 0.8f);
+
     size_t mp = j.find("\"phoneme_id_map\"");
     if (mp == std::string::npos) return;
     size_t sb = j.find("{", mp);
@@ -102,7 +120,14 @@ void parseModelConfig(const char* configPath) {
             std::string key = unescapeJson(j.substr(p + 1, eq - p - 1));
             size_t bs = j.find("[", eq), be = j.find("]", bs);
             if (bs != std::string::npos && be != std::string::npos) {
-                try { phonemeIdMap[key] = std::stoll(j.substr(bs + 1, be - bs - 1)); } catch (...) {}
+                std::string arr = j.substr(bs + 1, be - bs - 1);
+                std::stringstream ss(arr);
+                std::string item;
+                std::vector<int64_t> ids;
+                while (std::getline(ss, item, ',')) {
+                    try { ids.push_back(std::stoll(item)); } catch (...) {}
+                }
+                if (!ids.empty()) phonemeIdMap[key] = ids;
                 p = be + 1; continue;
             }
         } else if (j[p] == '{') bc++;
@@ -121,41 +146,133 @@ std::string cleanEspeakFlags(const std::string& rawIpa) {
     return out;
 }
 
-std::string normalizeInputText(const std::string& s) {
-    std::string out;
-    for (uint32_t cp : toCps(s)) {
-        if (cp == 0x0964 || cp == 0x0965) out += ". ";
-        else out += fromCp(cp);
+std::string detectCharLang(uint32_t cp, const std::string& defaultLang) {
+    if (cp >= 0x0900 && cp <= 0x097F) return "hi";
+    if (cp >= 0x0980 && cp <= 0x09FF) return "bn";
+    if (cp >= 0x0A00 && cp <= 0x0A7F) return "pa";
+    if (cp >= 0x0A80 && cp <= 0x0AFF) return "gu";
+    if (cp >= 0x0B00 && cp <= 0x0B7F) return "or";
+    if (cp >= 0x0B80 && cp <= 0x0BFF) return "ta";
+    if (cp >= 0x0C00 && cp <= 0x0C7F) return "te";
+    if (cp >= 0x0C80 && cp <= 0x0CFF) return "kn";
+    if (cp >= 0x0D00 && cp <= 0x0D7F) return "ml";
+    if (cp >= 0x0600 && cp <= 0x06FF) return "ur";
+    if (cp >= 0x0400 && cp <= 0x04FF) return "ru";
+    if ((cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z')) {
+        if (defaultLang.find("hi") == 0 || defaultLang.find("bn") == 0 || defaultLang.find("ta") == 0 || defaultLang.find("te") == 0 || defaultLang.find("kn") == 0 || defaultLang.find("ml") == 0 || defaultLang.find("gu") == 0 || defaultLang.find("mr") == 0) {
+            return "en-us";
+        }
+        return defaultLang;
     }
-    return out;
+    return "";
+}
+
+std::vector<std::pair<std::string, std::string>> splitByLanguage(const std::string& text, const std::string& baseLang) {
+    std::vector<std::pair<std::string, std::string>> segments;
+    std::vector<uint32_t> cps = toCps(text);
+    std::string curLang = baseLang;
+    for (uint32_t cp : cps) {
+        std::string l = detectCharLang(cp, baseLang);
+        if (!l.empty()) { curLang = l; break; }
+    }
+    std::string curText = "";
+    for (uint32_t cp : cps) {
+        if (cp == 0x0964 || cp == 0x0965) {
+            curText += ". ";
+            continue;
+        }
+        std::string l = detectCharLang(cp, baseLang);
+        if (!l.empty() && l != curLang) {
+            if (!curText.empty()) segments.push_back({curLang, curText});
+            curLang = l;
+            curText = fromCp(cp);
+        } else {
+            curText += fromCp(cp);
+        }
+    }
+    if (!curText.empty()) segments.push_back({curLang, curText});
+    return segments;
+}
+
+std::vector<std::string> getFallbackPhonemes(const std::string& sym) {
+    static const std::map<std::string, std::vector<std::string>> fb = {
+        {"ʈ", {"t"}}, {"ɖ", {"d"}}, {"ɳ", {"n"}}, {"ɽ", {"r", "ɾ", "d"}}, {"ɭ", {"l"}}, {"ʂ", {"ʃ", "s"}}, {"ʐ", {"ʒ", "z"}},
+        {"ɾ", {"r", "d"}}, {"r", {"ɾ", "ɹ"}}, {"ɹ", {"r", "ɾ"}},
+        {"ʰ", {"h"}}, {"ɦ", {"h"}}, {"ʱ", {"h"}},
+        {"ʋ", {"v", "w"}}, {"v", {"ʋ", "w"}}, {"w", {"ʋ", "v"}},
+        {"θ", {"t", "h"}}, {"ð", {"d"}}, {"ʃ", {"s"}}, {"ʒ", {"z", "dʒ"}},
+        {"ɐ", {"ə", "a", "ʌ"}}, {"ʌ", {"ə", "a", "ɐ"}}, {"ə", {"ɐ", "ʌ", "a"}},
+        {"ɑ", {"a", "ɔ"}}, {"æ", {"ɛ", "e", "a"}}, {"ɛ", {"e", "æ"}}, {"ɪ", {"i", "e"}}, {"ʊ", {"u", "o"}},
+        {"ː", {}}, {"ˈ", {}}, {"ˌ", {}}
+    };
+    if (fb.count(sym)) return fb.at(sym);
+    return {};
+}
+
+std::string normalizeCrossLangIpa(const std::string& ipa) {
+    std::string s = ipa;
+    const std::vector<std::pair<std::string, std::string>> rep = {
+        {"eɪ", "eː"}, {"oʊ", "oː"}, {"əʊ", "oː"},
+        {"aɪ", "aːɪ"}, {"aʊ", "aːʊ"}, {"ɔɪ", "ɔɪ"},
+        {"ɜː", "əɾ"}, {"ɚ", "əɾ"}, {"ɝ", "əɾ"},
+        {"ɪə", "iːə"}, {"ɛə", "eːə"}, {"ʊə", "uːə"},
+        {"tʃ", "tʃ"}, {"dʒ", "dʒ"}
+    };
+    for (const auto& p : rep) {
+        if (!phonemeIdMap.count(p.first)) {
+            size_t pos = 0;
+            while ((pos = s.find(p.first, pos)) != std::string::npos) {
+                s.replace(pos, p.first.length(), p.second);
+                pos += p.second.length();
+            }
+        }
+    }
+    return s;
+}
+
+void appendPhonemeIds(const std::string& rawClause, std::vector<int64_t>& ids, int64_t pad) {
+    std::string ipaClause = normalizeCrossLangIpa(rawClause);
+    std::vector<uint32_t> cps = toCps(ipaClause);
+    for (uint32_t cp : cps) {
+        std::string s = fromCp(cp);
+        if (phonemeIdMap.count(s)) {
+            for (int64_t id : phonemeIdMap[s]) { ids.push_back(id); ids.push_back(pad); }
+        } else {
+            std::vector<std::string> fallbacks = getFallbackPhonemes(s);
+            for (const std::string& alt : fallbacks) {
+                if (phonemeIdMap.count(alt)) {
+                    for (int64_t id : phonemeIdMap[alt]) { ids.push_back(id); ids.push_back(pad); }
+                    break;
+                }
+            }
+        }
+    }
 }
 
 std::vector<std::string> phonemizeToClauses(const std::string& rawText) {
     std::vector<std::string> clauses;
     if (!isEspeakInitialized) return clauses;
-    std::string normText = normalizeInputText(rawText);
-
-    bool hasDeva = false;
-    for (uint32_t cp : toCps(normText)) {
-        if (cp >= 0x0900 && cp <= 0x097F) { hasDeva = true; break; }
-    }
-    if (hasDeva && currentVoiceLang.find("en") == 0) espeak_SetVoiceByName("hi");
-    else if (espeak_SetVoiceByName(currentVoiceLang.c_str()) != EE_OK) espeak_SetVoiceByName("en-us");
-
-    const char* inputPtr = normText.c_str();
+    auto segments = splitByLanguage(rawText, currentVoiceLang);
     int mode = espeakCHARS_UTF8 | (1 << 1);
-    while (inputPtr != nullptr && *inputPtr != '\0') {
-        int term = 0;
-        const char* ph = espeak_TextToPhonemesWithTerminator((const void**)&inputPtr, espeakCHARS_UTF8, mode, &term);
-        std::string ipa = (ph && *ph) ? cleanEspeakFlags(std::string(ph)) : "";
-        int pt = term & CLAUSE_TYPE_MASK;
-        if (pt == CLAUSE_PERIOD) ipa += ".";
-        else if (pt == CLAUSE_QUESTION) ipa += "?";
-        else if (pt == CLAUSE_EXCLAMATION) ipa += "!";
-        else if (pt == CLAUSE_COMMA) ipa += ", ";
-        else if (pt == CLAUSE_COLON) ipa += ": ";
-        else if (pt == CLAUSE_SEMICOLON) ipa += "; ";
-        if (!ipa.empty()) clauses.push_back(ipa);
+
+    for (const auto& seg : segments) {
+        if (espeak_SetVoiceByName(seg.first.c_str()) != EE_OK) {
+            espeak_SetVoiceByName("en-us");
+        }
+        const char* inputPtr = seg.second.c_str();
+        while (inputPtr != nullptr && *inputPtr != '\0') {
+            int term = 0;
+            const char* ph = espeak_TextToPhonemesWithTerminator((const void**)&inputPtr, espeakCHARS_UTF8, mode, &term);
+            std::string ipa = (ph && *ph) ? cleanEspeakFlags(std::string(ph)) : "";
+            int pt = term & CLAUSE_TYPE_MASK;
+            if (pt == CLAUSE_PERIOD) ipa += ".";
+            else if (pt == CLAUSE_QUESTION) ipa += "?";
+            else if (pt == CLAUSE_EXCLAMATION) ipa += "!";
+            else if (pt == CLAUSE_COMMA) ipa += ", ";
+            else if (pt == CLAUSE_COLON) ipa += ": ";
+            else if (pt == CLAUSE_SEMICOLON) ipa += "; ";
+            if (!ipa.empty()) clauses.push_back(ipa);
+        }
     }
     espeak_SetVoiceByName(currentVoiceLang.c_str());
     return clauses;
@@ -211,18 +328,15 @@ Java_com_itfb_dhwanitts_PiperEngine_nativeSynthesize(JNIEnv* env, jclass, jstrin
     try {
         std::vector<std::string> clauses = phonemizeToClauses(inStr);
         if (clauses.empty()) return env->NewByteArray(0);
-        int64_t bos = phonemeIdMap.count("^") ? phonemeIdMap["^"] : 1;
-        int64_t eos = phonemeIdMap.count("$") ? phonemeIdMap["$"] : 2;
-        int64_t pad = phonemeIdMap.count("_") ? phonemeIdMap["_"] : 0;
+        int64_t bos = phonemeIdMap.count("^") ? phonemeIdMap["^"][0] : 1;
+        int64_t eos = phonemeIdMap.count("$") ? phonemeIdMap["$"][0] : 2;
+        int64_t pad = phonemeIdMap.count("_") ? phonemeIdMap["_"][0] : 0;
 
         std::vector<int64_t> ids = {bos, pad};
         for (size_t cIdx = 0; cIdx < clauses.size(); ++cIdx) {
-            for (uint32_t cp : toCps(clauses[cIdx])) {
-                std::string s = fromCp(cp);
-                if (phonemeIdMap.count(s)) { ids.push_back(phonemeIdMap[s]); ids.push_back(pad); }
-            }
+            appendPhonemeIds(clauses[cIdx], ids, pad);
             if (cIdx + 1 < clauses.size() && phonemeIdMap.count(" ")) {
-                ids.push_back(phonemeIdMap[" "]); ids.push_back(pad);
+                ids.push_back(phonemeIdMap[" "][0]); ids.push_back(pad);
             }
         }
         ids.push_back(eos);

@@ -1,71 +1,85 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp"
-    android:gravity="center_horizontal">
+    android:background="#000000"
+    android:padding="16dp">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="DhwaniTTS Settings &amp; About"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="24dp" />
-
-    <!-- डार्क मोड स्विच -->
-    <Switch
-        android:id="@+id/switch_dark_mode"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Dark Mode"
-        android:textSize="16sp"
-        android:layout_marginBottom="16dp"
-        android:padding="8dp" />
+        android:orientation="vertical">
 
-    <!-- वाई-फाई ओन्ली स्विच -->
-    <Switch
-        android:id="@+id/switch_wifi_only"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Wi-Fi Only Mode"
-        android:textSize="16sp"
-        android:layout_marginBottom="16dp"
-        android:padding="8dp" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="App Settings"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp" />
 
-    <!-- हाई कंट्रास्ट स्विच -->
-    <Switch
-        android:id="@+id/switch_high_contrast"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="High Contrast"
-        android:textSize="16sp"
-        android:layout_marginBottom="16dp"
-        android:padding="8dp" />
+        <Switch
+            android:id="@+id/switch_dark_mode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Dark Mode"
+            android:textColor="#FFFFFF"
+            android:minHeight="48dp"
+            android:layout_marginBottom="10dp" />
 
-    <!-- फॉन्ट साइज़ चयन के लिए Spinner -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Select Font Size:"
-        android:textSize="16sp"
-        android:layout_marginBottom="8dp" />
+        <Switch
+            android:id="@+id/switch_wifi_only"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Download Voices on Wi-Fi Only"
+            android:textColor="#FFFFFF"
+            android:minHeight="48dp"
+            android:layout_marginBottom="10dp" />
 
-    <Spinner
-        android:id="@+id/spinner_font_size"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="24dp"
-        android:padding="8dp" />
+        <Switch
+            android:id="@+id/switch_high_contrast"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="High Contrast Text"
+            android:textColor="#FFFFFF"
+            android:minHeight="48dp"
+            android:layout_marginBottom="16dp" />
 
-    <!-- WhatsApp कांटेक्ट डेवलपर बटन -->
-    <Button
-        android:id="@+id/btn_contact_developer"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Contact Developer (WhatsApp)"
-        android:textAllCaps="false"
-        android:padding="12dp" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Font Size"
+            android:textColor="#00E676"
+            android:textSize="16sp"
+            android:layout_marginBottom="6dp" />
 
-</LinearLayout>
+        <Spinner
+            android:id="@+id/spinner_font_size"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginBottom="20dp" />
+
+        <Button
+            android:id="@+id/btn_battery_optimization"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Allow Background Running (Disable Battery Optimization)"
+            android:layout_marginBottom="12dp" />
+
+        <Button
+            android:id="@+id/btn_check_update"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Check for Update"
+            android:layout_marginBottom="12dp" />
+
+        <Button
+            android:id="@+id/btn_contact_developer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Contact Developer" />
+
+    </LinearLayout>
+</ScrollView>
