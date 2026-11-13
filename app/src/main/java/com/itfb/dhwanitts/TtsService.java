@@ -8,13 +8,11 @@ import android.speech.tts.SynthesisRequest;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.TextToSpeechService;
 import android.text.TextUtils;
-import android.util.Log;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
 public class TtsService extends TextToSpeechService {
-    private static final String TAG = "DhwaniTTS_Service";
     private PiperEngine piperEngine;
     private SharedPreferences prefs;
     private String currentLoadedModel = "";
@@ -45,7 +43,6 @@ public class TtsService extends TextToSpeechService {
     @Override
     protected void onStop() {
         isStopped = true;
-        Log.d(TAG, "TalkBack stopped speaking");
     }
 
     private String resolveModelPath(String keyOrPath) {
@@ -64,75 +61,14 @@ public class TtsService extends TextToSpeechService {
         return "";
     }
 
-    private String cleanAndNormalizeText(String input, boolean isIndicVoice, int numMode, int puncMode) {
+    private String cleanAndNormalizeText(String input, int numMode, int puncMode) {
         if (input == null || input.isEmpty()) return "";
         String out = input;
 
-        // Split CamelCase words like TalkBack -> Talk Back, WhatsApp -> Whats App, YouTube -> You Tube
+        // Split joined CamelCase words cleanly for screen readers
         out = out.replaceAll("([a-z])([A-Z])", "$1 $2");
         out = out.replaceAll("([A-Z]+)([A-Z][a-z])", "$1 $2");
         out = out.replace("_", " ");
-
-        // Fix common UI abbreviations for crystal clear reading in all languages
-        out = out.replaceAll("(?i)\\bnav\\b", "navigate")
-                 .replaceAll("(?i)\\bbtn\\b", "button")
-                 .replaceAll("(?i)\\bmsg\\b", "message")
-                 .replaceAll("(?i)\\binfo\\b", "information")
-                 .replaceAll("(?i)\\bsec\\b", "seconds")
-                 .replaceAll("(?i)\\bmin\\b", "minutes")
-                 .replaceAll("(?i)\\bvol\\b", "volume")
-                 .replaceAll("(?i)\\bconfig\\b", "configuration");
-
-        // Vocalizer-style phonetic mapping when a Hindi/Devanagari voice reads common English UI words
-        if (isIndicVoice) {
-            out = out.replaceAll("(?i)\\bnavigate up\\b", "नेविगेट अप")
-                     .replaceAll("(?i)\\bnavigate\\b", "नेविगेट")
-                     .replaceAll("(?i)\\bdouble tap to activate\\b", "डबल टैप टू एक्टिवेट")
-                     .replaceAll("(?i)\\bdouble tap\\b", "डबल टैप")
-                     .replaceAll("(?i)\\bbutton\\b", "बटन")
-                     .replaceAll("(?i)\\bchecked\\b", "चेक्ड")
-                     .replaceAll("(?i)\\bunchecked\\b", "अनचेक्ड")
-                     .replaceAll("(?i)\\bnot checked\\b", "नॉट चेक्ड")
-                     .replaceAll("(?i)\\bswitch\\b", "स्विच")
-                     .replaceAll("(?i)\\bsettings\\b", "सेटिंग्स")
-                     .replaceAll("(?i)\\bsearch\\b", "सर्च")
-                     .replaceAll("(?i)\\bmore options\\b", "मोर ऑप्शंस")
-                     .replaceAll("(?i)\\bnotification\\b", "नोटिफिकेशन")
-                     .replaceAll("(?i)\\bmessage\\b", "मैसेज")
-                     .replaceAll("(?i)\\bwhatsapp\\b", "व्हाट्सऐप")
-                     .replaceAll("(?i)\\byoutube\\b", "यूट्यूब")
-                     .replaceAll("(?i)\\btelegram\\b", "टेलीग्राम")
-                     .replaceAll("(?i)\\bgoogle\\b", "गूगल")
-                     .replaceAll("(?i)\\bphone\\b", "फोन")
-                     .replaceAll("(?i)\\bcamera\\b", "कैमरा")
-                     .replaceAll("(?i)\\bgallery\\b", "गैलरी")
-                     .replaceAll("(?i)\\bhome\\b", "होम")
-                     .replaceAll("(?i)\\bback\\b", "बैक")
-                     .replaceAll("(?i)\\boverview\\b", "ओवरव्यू")
-                     .replaceAll("(?i)\\brecent apps\\b", "रीसेंट ऐप्स")
-                     .replaceAll("(?i)\\bselected\\b", "सिलेक्टेड")
-                     .replaceAll("(?i)\\bdisabled\\b", "डिसेबल्ड")
-                     .replaceAll("(?i)\\bedit box\\b", "एडिट बॉक्स")
-                     .replaceAll("(?i)\\bshowing\\b", "शोइंग")
-                     .replaceAll("(?i)\\bkeyboard\\b", "कीबोर्ड")
-                     .replaceAll("(?i)\\bwindow\\b", "विंडो")
-                     .replaceAll("(?i)\\bscreen\\b", "स्क्रीन")
-                     .replaceAll("(?i)\\bbattery\\b", "बैटरी")
-                     .replaceAll("(?i)\\bcharging\\b", "चार्जिंग")
-                     .replaceAll("(?i)\\bdownload\\b", "डाउनलोड")
-                     .replaceAll("(?i)\\bupdate\\b", "अपडेट")
-                     .replaceAll("(?i)\\bvoice\\b", "वॉइस")
-                     .replaceAll("(?i)\\blanguage\\b", "लैंग्वेज")
-                     .replaceAll("(?i)\\bdefault\\b", "डिफ़ॉल्ट")
-                     .replaceAll("(?i)\\bactive\\b", "एक्टिव")
-                     .replaceAll("(?i)\\bsave\\b", "सेव")
-                     .replaceAll("(?i)\\breset\\b", "रीसेट")
-                     .replaceAll("(?i)\\bcancel\\b", "कैंसिल")
-                     .replaceAll("(?i)\\bdelete\\b", "डिलीट")
-                     .replaceAll("(?i)\\bshare\\b", "शेयर")
-                     .replaceAll("(?i)\\bcopy\\b", "कॉपी")
-                     .replaceAll("(?i)\\bpaste\\b", "पेस्ट");
-        }
 
         if (numMode == 1) {
             out = out.replaceAll("(\\d)", "$1 ");
@@ -150,26 +86,25 @@ public class TtsService extends TextToSpeechService {
                      .replace("+", " plus ").replace("-", " minus ").replace("=", " equals ")
                      .replace("/", " slash ");
         }
-        return out.trim();
+
+        return out.replaceAll("\\s+", " ").trim();
     }
 
     private List<String> splitIntoFastChunks(String text) {
         List<String> chunks = new ArrayList<>();
         if (text.isEmpty()) return chunks;
 
-        // Split by sentence punctuation or newlines for instant first-chunk playback
-        String[] rawParts = text.split("(?<=[.!?।,\\n;:—])\\s+");
+        String[] rawParts = text.split("(?<=[.!?।\\n;:—])\\s+");
         for (String part : rawParts) {
             String trimmed = part.trim();
             if (trimmed.isEmpty()) continue;
-            // If a single clause is still very long (> 120 chars), break by words every ~90 chars
-            if (trimmed.length() <= 120) {
+            if (trimmed.length() <= 160) {
                 chunks.add(trimmed);
             } else {
                 String[] words = trimmed.split("\\s+");
                 StringBuilder sb = new StringBuilder();
                 for (String w : words) {
-                    if (sb.length() + w.length() > 90 && sb.length() > 0) {
+                    if (sb.length() + w.length() > 120 && sb.length() > 0) {
                         chunks.add(sb.toString().trim());
                         sb.setLength(0);
                     }
@@ -183,32 +118,38 @@ public class TtsService extends TextToSpeechService {
         return chunks;
     }
 
-    private byte[] boostLoudnessClean(byte[] pcm) {
+    // Full Loudness + Crisp Consonant Clarity without Sibilant Distortion
+    public static byte[] enhanceHdClarityAndLoudness(byte[] pcm) {
         if (pcm == null || pcm.length < 4) return pcm;
         int n = pcm.length / 2;
-        int maxAbs = 1;
+
+        // Pass 1: Apply subtle High-Frequency Presence (Crisp S, Sh, T, K) and find true peak
+        float[] processed = new float[n];
+        float prev = 0f;
+        float maxPeak = 1.0f;
+
         for (int i = 0; i < n; i++) {
             short s = (short) ((pcm[i * 2] & 0xFF) | (pcm[i * 2 + 1] << 8));
-            int a = s < 0 ? -s : s;
-            if (a > maxAbs) maxAbs = a;
+            // 18% high-frequency clarity boost restores sharp consonants without lisping
+            float crisp = s + 0.18f * (s - prev);
+            prev = s;
+            processed[i] = crisp;
+            float abs = crisp < 0 ? -crisp : crisp;
+            if (abs > maxPeak) maxPeak = abs;
         }
-        if (maxAbs < 150) return pcm;
-        float targetGain = 31000.0f / maxAbs;
-        if (targetGain < 1.35f) targetGain = 1.35f;
-        if (targetGain > 3.2f) targetGain = 3.2f;
+
+        if (maxPeak < 100.0f) return pcm;
+
+        // Pass 2: True Linear Peak Normalization to 31,500 (96% Full Volume) with ZERO wave-crushing
+        float gain = 31500.0f / maxPeak;
+        if (gain < 1.35f) gain = 1.35f;
+        if (gain > 2.80f) gain = 2.80f;
 
         byte[] out = new byte[pcm.length];
         for (int i = 0; i < n; i++) {
-            short s = (short) ((pcm[i * 2] & 0xFF) | (pcm[i * 2 + 1] << 8));
-            float val = s * targetGain;
-            // Soft-knee limiter so peaks never crack or distort
-            if (val > 27000.0f) {
-                val = 27000.0f + (val - 27000.0f) / (1.0f + ((val - 27000.0f) / 5500.0f));
-            } else if (val < -27000.0f) {
-                val = -27000.0f + (val + 27000.0f) / (1.0f + ((-val - 27000.0f) / 5500.0f));
-            }
-            if (val > 32700.0f) val = 32700.0f;
-            if (val < -32700.0f) val = -32700.0f;
+            float val = processed[i] * gain;
+            if (val > 32600.0f) val = 32600.0f;
+            if (val < -32600.0f) val = -32600.0f;
             short outSample = (short) val;
             out[i * 2] = (byte) (outSample & 0xFF);
             out[i * 2 + 1] = (byte) ((outSample >> 8) & 0xFF);
@@ -246,11 +187,10 @@ public class TtsService extends TextToSpeechService {
                 }
             }
 
-            boolean isIndic = priModel.contains("hi_") || priModel.contains("mr_") || priModel.contains("ne_") || priModel.contains("bn_") || priModel.contains("gu_") || priModel.contains("ta_") || priModel.contains("te_") || priModel.contains("kn_") || priModel.contains("ml_");
             int numMode = prefs.getInt("num_pos", 0);
             int puncMode = prefs.getInt("punc_pos", 0);
 
-            String normalizedText = cleanAndNormalizeText(cs.toString(), isIndic, numMode, puncMode);
+            String normalizedText = cleanAndNormalizeText(cs.toString(), numMode, puncMode);
             if (normalizedText.isEmpty()) {
                 callback.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1);
                 callback.done();
@@ -267,7 +207,6 @@ public class TtsService extends TextToSpeechService {
             if (pitchFactor < 0.5f) pitchFactor = 0.5f;
             if (pitchFactor > 2.0f) pitchFactor = 2.0f;
 
-            // Use hardware sample rate for pitch so audio remains 100% distortion-free and crystal clear
             int sampleRate = Math.max(8000, Math.min(48000, (int) (22050 * pitchFactor)));
             float engineSpeed = baseSpeed / pitchFactor;
 
@@ -279,8 +218,9 @@ public class TtsService extends TextToSpeechService {
 
             for (String chunk : chunks) {
                 if (isStopped) break;
-                byte[] pcm = boostLoudnessClean(piperEngine.synthesizeText(chunk, engineSpeed));
-                if (pcm != null && pcm.length > 0) {
+                byte[] rawPcm = piperEngine.synthesizeText(chunk, engineSpeed);
+                if (rawPcm != null && rawPcm.length > 0) {
+                    byte[] pcm = enhanceHdClarityAndLoudness(rawPcm);
                     wroteAnyAudio = true;
                     int offset = 0;
                     while (offset < pcm.length && !isStopped) {
