@@ -183,6 +183,39 @@ public class TtsService extends TextToSpeechService {
         return chunks;
     }
 
+    private byte[] boostLoudnessClean(byte[] pcm) {
+        if (pcm == null || pcm.length < 4) return pcm;
+        int n = pcm.length / 2;
+        int maxAbs = 1;
+        for (int i = 0; i < n; i++) {
+            short s = (short) ((pcm[i * 2] & 0xFF) | (pcm[i * 2 + 1] << 8));
+            int a = s < 0 ? -s : s;
+            if (a > maxAbs) maxAbs = a;
+        }
+        if (maxAbs < 150) return pcm;
+        float targetGain = 31000.0f / maxAbs;
+        if (targetGain < 1.35f) targetGain = 1.35f;
+        if (targetGain > 3.2f) targetGain = 3.2f;
+
+        byte[] out = new byte[pcm.length];
+        for (int i = 0; i < n; i++) {
+            short s = (short) ((pcm[i * 2] & 0xFF) | (pcm[i * 2 + 1] << 8));
+            float val = s * targetGain;
+            // Soft-knee limiter so peaks never crack or distort
+            if (val > 27000.0f) {
+                val = 27000.0f + (val - 27000.0f) / (1.0f + ((val - 27000.0f) / 5500.0f));
+            } else if (val < -27000.0f) {
+                val = -27000.0f + (val + 27000.0f) / (1.0f + ((-val - 27000.0f) / 5500.0f));
+            }
+            if (val > 32700.0f) val = 32700.0f;
+            if (val < -32700.0f) val = -32700.0f;
+            short outSample = (short) val;
+            out[i * 2] = (byte) (outSample & 0xFF);
+            out[i * 2 + 1] = (byte) ((outSample >> 8) & 0xFF);
+        }
+        return out;
+    }
+
     @Override
     protected void onSynthesizeText(SynthesisRequest request, SynthesisCallback callback) {
         isStopped = false;
@@ -246,7 +279,7 @@ public class TtsService extends TextToSpeechService {
 
             for (String chunk : chunks) {
                 if (isStopped) break;
-                byte[] pcm = piperEngine.synthesizeText(chunk, engineSpeed);
+                byte[] pcm = boostLoudnessClean(piperEngine.synthesizeText(chunk, engineSpeed));
                 if (pcm != null && pcm.length > 0) {
                     wroteAnyAudio = true;
                     int offset = 0;

@@ -5,6 +5,9 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,8 +28,22 @@ jobs:
     - name: Build APK with C++ (Real Voice)
       run: ./gradlew assembleDebug
 
+    - name: Copy APK with clean name
+      run: cp app/build/outputs/apk/debug/app-debug.apk DhwaniTTS-latest.apk
+
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: DhwaniTTS-RealVoice-APK
         path: app/build/outputs/apk/debug/app-debug.apk
+
+    - name: Publish Direct APK to GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: latest
+        name: "DhwaniTTS Latest Build"
+        body: "Automated latest build of DhwaniTTS for direct in-app update."
+        files: DhwaniTTS-latest.apk
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

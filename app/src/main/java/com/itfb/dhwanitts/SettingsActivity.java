@@ -15,8 +15,12 @@ import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.FileProvider;
 import org.json.JSONObject;
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -56,7 +60,7 @@ public class SettingsActivity extends AppCompatActivity {
         switchContrast.setOnCheckedChangeListener((b, v) -> prefs.edit().putBoolean("high_contrast", v).apply());
 
         btnBattery.setOnClickListener(v -> requestBatteryExemption());
-        btnUpdate.setOnClickListener(v -> checkForGitHubUpdate());
+        btnUpdate.setOnClickListener(v -> checkForGitHubUpdate(this));
 
         btnContact.setOnClickListener(v -> {
             Intent email = new Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:contact.i.t.f.b@gmail.com"));
@@ -86,8 +90,9 @@ public class SettingsActivity extends AppCompatActivity {
         }
     }
 
-    private void checkForGitHubUpdate() {
-        Toast.makeText(this, "Checking for updates...", Toast.LENGTH_SHORT).show();
+    public static void checkForGitHubUpdate(Context ctx) {
+        SharedPreferences prefs = ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
+        Toast.makeText(ctx, "Checking for updates...", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             try {
                 URL url = new URL("https://api.github.com/repos/parasyadav75963-eng/Dhvnitts/commits/main");
@@ -109,7 +114,7 @@ public class SettingsActivity extends AppCompatActivity {
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
                 sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
                 long commitTimeMs = sdf.parse(commitDateStr).getTime();
-                long apkTimeMs = getPackageManager().getPackageInfo(getPackageName(), 0).lastUpdateTime;
+                long apkTimeMs = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0).lastUpdateTime;
 
                 String savedSha = prefs.getString("installed_commit_sha", "");
                 boolean isLatest = latestSha.equals(savedSha) || (apkTimeMs >= (commitTimeMs - 120000));
@@ -117,29 +122,114 @@ public class SettingsActivity extends AppCompatActivity {
                     prefs.edit().putString("installed_commit_sha", latestSha).apply();
                 }
 
-                runOnUiThread(() -> {
+                android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+                mainHandler.post(() -> {
                     if (isLatest) {
-                        Toast.makeText(this, "Latest update is already installed!", Toast.LENGTH_LONG).show();
-                        new AlertDialog.Builder(this)
+                        Toast.makeText(ctx, "Latest update is already installed!", Toast.LENGTH_LONG).show();
+                        new AlertDialog.Builder(ctx)
                                 .setTitle("Up to Date")
                                 .setMessage("Latest update is already installed (" + latestSha + ").")
                                 .setPositiveButton("OK", null)
                                 .show();
                     } else {
-                        new AlertDialog.Builder(this)
+                        new AlertDialog.Builder(ctx)
                                 .setTitle("New Update Available (" + latestSha + ")")
-                                .setMessage("What's New:\n" + commitMsg + "\n\nDownload the latest APK from GitHub?")
-                                .setPositiveButton("Download Latest APK", (d, w) -> {
-                                    prefs.edit().putString("installed_commit_sha", latestSha).apply();
-                                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/parasyadav75963-eng/Dhvnitts/actions")));
+                                .setMessage("What's New:\n" + commitMsg + "\n\nTap below to download and install the update directly inside the app.")
+                                .setPositiveButton("Download & Install Update", (d, w) -> {
+                                    downloadAndInstallApk(ctx, latestSha);
                                 })
                                 .setNegativeButton("Cancel", null)
                                 .show();
                     }
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this, "Update check failed. Check internet connection.", Toast.LENGTH_SHORT).show());
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() ->
+                        Toast.makeText(ctx, "Update check failed. Check internet connection.", Toast.LENGTH_SHORT).show());
             }
         }).start();
+    }
+
+    public static void downloadAndInstallApk(Context ctx, String targetSha) {
+        android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        AlertDialog progressDialog = new AlertDialog.Builder(ctx)
+                .setTitle("Downloading Update...")
+                .setMessage("Starting download, please wait...")
+                .setCancelable(false)
+                .create();
+        progressDialog.show();
+
+        new Thread(() -> {
+            try {
+                String apkUrl = "https://github.com/parasyadav75963-eng/Dhvnitts/releases/download/latest/DhwaniTTS-latest.apk";
+                HttpURLConnection conn = (HttpURLConnection) new URL(apkUrl).openConnection();
+                conn.setInstanceFollowRedirects(true);
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(30000);
+                conn.connect();
+
+                int totalLength = conn.getContentLength();
+                InputStream in = conn.getInputStream();
+                File outFile = new File(ctx.getExternalFilesDir(null), "DhwaniTTS-update.apk");
+                if (outFile.exists()) outFile.delete();
+                FileOutputStream out = new FileOutputStream(outFile);
+
+                byte[] buf = new byte[8192];
+                int count;
+                long downloaded = 0;
+                int lastPercent = -1;
+
+                while ((count = in.read(buf)) != -1) {
+                    downloaded += count;
+                    out.write(buf, 0, count);
+                    if (totalLength > 0) {
+                        int percent = (int) ((downloaded * 100) / totalLength);
+                        if (percent != lastPercent && percent % 10 == 0) {
+                            lastPercent = percent;
+                            final int p = percent;
+                            mainHandler.post(() -> progressDialog.setMessage("Downloading update: " + p + "%"));
+                        }
+                    }
+                }
+                out.flush();
+                out.close();
+                in.close();
+
+                ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE)
+                        .edit().putString("installed_commit_sha", targetSha).apply();
+
+                mainHandler.post(() -> {
+                    progressDialog.dismiss();
+                    Toast.makeText(ctx, "Download complete! Opening installer...", Toast.LENGTH_LONG).show();
+                    installApkFile(ctx, outFile);
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    progressDialog.dismiss();
+                    Toast.makeText(ctx, "Direct download failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
+    }
+
+    private static void installApkFile(Context ctx, File apkFile) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (!ctx.getPackageManager().canRequestPackageInstalls()) {
+                    Toast.makeText(ctx, "Please allow 'Install unknown apps' for DhwaniTTS first.", Toast.LENGTH_LONG).show();
+                    Intent permIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                            Uri.parse("package:" + ctx.getPackageName()));
+                    permIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    ctx.startActivity(permIntent);
+                    return;
+                }
+            }
+            Uri apkUri = FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".fileprovider", apkFile);
+            Intent install = new Intent(Intent.ACTION_VIEW);
+            install.setDataAndType(apkUri, "application/vnd.android.package-archive");
+            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            ctx.startActivity(install);
+        } catch (Exception e) {
+            Toast.makeText(ctx, "Installer error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 }
