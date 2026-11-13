@@ -13,7 +13,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Active Configuration Status"
+            android:text="Active Voice Status"
             android:textColor="#00E676"
             android:textSize="15sp"
             android:textStyle="bold"
@@ -23,7 +23,7 @@
             android:id="@+id/tv_active_config_summary"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Mode: Single | Primary: None | Sec: None | Num: None"
+            android:text="Active Voice: None | Rate: 50% | Pitch: 50% | Vol: 100%"
             android:textColor="#FFFFFF"
             android:textSize="14sp"
             android:background="#1A1A1A"
@@ -33,74 +33,32 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Engine Mode (Single / Dual / Mix Auto-TTS)"
+            android:text="Select Language"
             android:textColor="#00E676"
-            android:textSize="16sp"
+            android:textSize="15sp"
             android:textStyle="bold" />
-
-        <Spinner
-            android:id="@+id/spinner_engine_mode"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:layout_marginBottom="12dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Primary Language"
-            android:textColor="#FFFFFF"
-            android:textSize="15sp" />
 
         <Spinner
             android:id="@+id/spinner_language"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:minHeight="48dp"
-            android:layout_marginBottom="10dp" />
+            android:layout_marginBottom="12dp" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Primary Voice"
-            android:textColor="#FFFFFF"
-            android:textSize="15sp" />
+            android:text="Select Voice"
+            android:textColor="#00E676"
+            android:textSize="15sp"
+            android:textStyle="bold" />
 
         <Spinner
             android:id="@+id/spinner_voice"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:minHeight="48dp"
-            android:layout_marginBottom="12dp" />
-
-        <TextView
-            android:id="@+id/tv_secondary_voice_label"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Secondary Voice (For English / Dual &amp; Mix Mode)"
-            android:textColor="#00E676"
-            android:textSize="15sp" />
-
-        <Spinner
-            android:id="@+id/spinner_secondary_voice"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:layout_marginBottom="12dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Dedicated Voice for Numbers"
-            android:textColor="#00E676"
-            android:textSize="15sp" />
-
-        <Spinner
-            android:id="@+id/spinner_number_voice"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:layout_marginBottom="12dp" />
+            android:layout_marginBottom="16dp" />
 
         <TextView
             android:id="@+id/tv_speech_rate_label"

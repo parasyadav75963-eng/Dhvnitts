@@ -3,32 +3,42 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="24dp"
-    android:gravity="center">
+    android:background="#000000"
+    android:padding="20dp">
 
     <TextView
         android:id="@+id/tv_welcome_title"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="DhwaniTTS"
-        android:textSize="28sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="24dp" />
-
-    <TextView
-        android:id="@+id/tv_welcome_notice"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textSize="16sp"
-        android:lineSpacingExtra="6dp"
-        android:layout_marginBottom="32dp" />
+        android:text="Welcome to DhwaniTTS"
+        android:textColor="#00E676"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="16dp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:id="@+id/tv_welcome_notice"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:lineSpacingExtra="5dp" />
+    </ScrollView>
 
     <Button
         android:id="@+id/btn_lets_start"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Let's Start"
+        android:text="OK, Let's Start"
         android:textSize="16sp"
-        android:padding="12dp" />
+        android:textStyle="bold"
+        android:padding="14dp" />
 
 </LinearLayout>

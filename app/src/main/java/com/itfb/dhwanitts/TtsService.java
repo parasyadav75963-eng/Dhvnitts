@@ -9,7 +9,6 @@ import android.speech.tts.TextToSpeech;
 import android.speech.tts.TextToSpeechService;
 import android.text.TextUtils;
 import android.util.Log;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,12 +18,7 @@ public class TtsService extends TextToSpeechService {
     private PiperEngine piperEngine;
     private SharedPreferences prefs;
     private String currentLoadedModel = "";
-
-    private static class Segment {
-        String text;
-        int type; // 0 = Primary, 1 = Secondary (English), 2 = Number
-        Segment(String t, int ty) { text = t; type = ty; }
-    }
+    private volatile boolean isStopped = false;
 
     @Override
     public void onCreate() {
@@ -50,6 +44,7 @@ public class TtsService extends TextToSpeechService {
 
     @Override
     protected void onStop() {
+        isStopped = true;
         Log.d(TAG, "TalkBack stopped speaking");
     }
 
@@ -69,11 +64,80 @@ public class TtsService extends TextToSpeechService {
         return "";
     }
 
-    private String applyNumberAndPunctuationRules(String input, int numMode, int puncMode) {
+    private String cleanAndNormalizeText(String input, boolean isIndicVoice, int numMode, int puncMode) {
+        if (input == null || input.isEmpty()) return "";
         String out = input;
+
+        // Split CamelCase words like TalkBack -> Talk Back, WhatsApp -> Whats App, YouTube -> You Tube
+        out = out.replaceAll("([a-z])([A-Z])", "$1 $2");
+        out = out.replaceAll("([A-Z]+)([A-Z][a-z])", "$1 $2");
+        out = out.replace("_", " ");
+
+        // Fix common UI abbreviations for crystal clear reading in all languages
+        out = out.replaceAll("(?i)\\bnav\\b", "navigate")
+                 .replaceAll("(?i)\\bbtn\\b", "button")
+                 .replaceAll("(?i)\\bmsg\\b", "message")
+                 .replaceAll("(?i)\\binfo\\b", "information")
+                 .replaceAll("(?i)\\bsec\\b", "seconds")
+                 .replaceAll("(?i)\\bmin\\b", "minutes")
+                 .replaceAll("(?i)\\bvol\\b", "volume")
+                 .replaceAll("(?i)\\bconfig\\b", "configuration");
+
+        // Vocalizer-style phonetic mapping when a Hindi/Devanagari voice reads common English UI words
+        if (isIndicVoice) {
+            out = out.replaceAll("(?i)\\bnavigate up\\b", "नेविगेट अप")
+                     .replaceAll("(?i)\\bnavigate\\b", "नेविगेट")
+                     .replaceAll("(?i)\\bdouble tap to activate\\b", "डबल टैप टू एक्टिवेट")
+                     .replaceAll("(?i)\\bdouble tap\\b", "डबल टैप")
+                     .replaceAll("(?i)\\bbutton\\b", "बटन")
+                     .replaceAll("(?i)\\bchecked\\b", "चेक्ड")
+                     .replaceAll("(?i)\\bunchecked\\b", "अनचेक्ड")
+                     .replaceAll("(?i)\\bnot checked\\b", "नॉट चेक्ड")
+                     .replaceAll("(?i)\\bswitch\\b", "स्विच")
+                     .replaceAll("(?i)\\bsettings\\b", "सेटिंग्स")
+                     .replaceAll("(?i)\\bsearch\\b", "सर्च")
+                     .replaceAll("(?i)\\bmore options\\b", "मोर ऑप्शंस")
+                     .replaceAll("(?i)\\bnotification\\b", "नोटिफिकेशन")
+                     .replaceAll("(?i)\\bmessage\\b", "मैसेज")
+                     .replaceAll("(?i)\\bwhatsapp\\b", "व्हाट्सऐप")
+                     .replaceAll("(?i)\\byoutube\\b", "यूट्यूब")
+                     .replaceAll("(?i)\\btelegram\\b", "टेलीग्राम")
+                     .replaceAll("(?i)\\bgoogle\\b", "गूगल")
+                     .replaceAll("(?i)\\bphone\\b", "फोन")
+                     .replaceAll("(?i)\\bcamera\\b", "कैमरा")
+                     .replaceAll("(?i)\\bgallery\\b", "गैलरी")
+                     .replaceAll("(?i)\\bhome\\b", "होम")
+                     .replaceAll("(?i)\\bback\\b", "बैक")
+                     .replaceAll("(?i)\\boverview\\b", "ओवरव्यू")
+                     .replaceAll("(?i)\\brecent apps\\b", "रीसेंट ऐप्स")
+                     .replaceAll("(?i)\\bselected\\b", "सिलेक्टेड")
+                     .replaceAll("(?i)\\bdisabled\\b", "डिसेबल्ड")
+                     .replaceAll("(?i)\\bedit box\\b", "एडिट बॉक्स")
+                     .replaceAll("(?i)\\bshowing\\b", "शोइंग")
+                     .replaceAll("(?i)\\bkeyboard\\b", "कीबोर्ड")
+                     .replaceAll("(?i)\\bwindow\\b", "विंडो")
+                     .replaceAll("(?i)\\bscreen\\b", "स्क्रीन")
+                     .replaceAll("(?i)\\bbattery\\b", "बैटरी")
+                     .replaceAll("(?i)\\bcharging\\b", "चार्जिंग")
+                     .replaceAll("(?i)\\bdownload\\b", "डाउनलोड")
+                     .replaceAll("(?i)\\bupdate\\b", "अपडेट")
+                     .replaceAll("(?i)\\bvoice\\b", "वॉइस")
+                     .replaceAll("(?i)\\blanguage\\b", "लैंग्वेज")
+                     .replaceAll("(?i)\\bdefault\\b", "डिफ़ॉल्ट")
+                     .replaceAll("(?i)\\bactive\\b", "एक्टिव")
+                     .replaceAll("(?i)\\bsave\\b", "सेव")
+                     .replaceAll("(?i)\\breset\\b", "रीसेट")
+                     .replaceAll("(?i)\\bcancel\\b", "कैंसिल")
+                     .replaceAll("(?i)\\bdelete\\b", "डिलीट")
+                     .replaceAll("(?i)\\bshare\\b", "शेयर")
+                     .replaceAll("(?i)\\bcopy\\b", "कॉपी")
+                     .replaceAll("(?i)\\bpaste\\b", "पेस्ट");
+        }
+
         if (numMode == 1) {
             out = out.replaceAll("(\\d)", "$1 ");
         }
+
         if (puncMode == 2) {
             out = out.replace("@", " at ").replace("#", " hash ").replace("$", " dollar ")
                      .replace("%", " percent ").replace("&", " and ").replace("*", " star ")
@@ -84,64 +148,44 @@ public class TtsService extends TextToSpeechService {
                      .replace("@", " at ").replace("#", " hash ").replace("$", " dollar ")
                      .replace("%", " percent ").replace("&", " and ").replace("*", " star ")
                      .replace("+", " plus ").replace("-", " minus ").replace("=", " equals ")
-                     .replace("/", " slash ").replace("_", " underscore ");
+                     .replace("/", " slash ");
         }
-        return out;
+        return out.trim();
     }
 
-    private List<Segment> splitSegments(String text, int engineMode, boolean hasSecVoice, boolean hasNumVoice) {
-        List<Segment> list = new ArrayList<>();
-        if (text.isEmpty()) return list;
-        if (engineMode == 0 && !hasNumVoice) {
-            list.add(new Segment(text, 0));
-            return list;
-        }
-        int curType = -1;
-        StringBuilder sb = new StringBuilder();
+    private List<String> splitIntoFastChunks(String text) {
+        List<String> chunks = new ArrayList<>();
+        if (text.isEmpty()) return chunks;
 
-        for (int i = 0; i < text.length(); ) {
-            int cp = text.codePointAt(i);
-            i += Character.charCount(cp);
-
-            int charType = curType;
-            if (Character.isDigit(cp) || (cp >= 0x0966 && cp <= 0x096F)) {
-                charType = hasNumVoice ? 2 : 0;
-            } else if ((cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z')) {
-                charType = (engineMode >= 1 && hasSecVoice) ? 1 : 0;
-            } else if (Character.isLetter(cp)) {
-                charType = 0;
+        // Split by sentence punctuation or newlines for instant first-chunk playback
+        String[] rawParts = text.split("(?<=[.!?।,\\n;:—])\\s+");
+        for (String part : rawParts) {
+            String trimmed = part.trim();
+            if (trimmed.isEmpty()) continue;
+            // If a single clause is still very long (> 120 chars), break by words every ~90 chars
+            if (trimmed.length() <= 120) {
+                chunks.add(trimmed);
             } else {
-                if (curType == -1) charType = 0;
+                String[] words = trimmed.split("\\s+");
+                StringBuilder sb = new StringBuilder();
+                for (String w : words) {
+                    if (sb.length() + w.length() > 90 && sb.length() > 0) {
+                        chunks.add(sb.toString().trim());
+                        sb.setLength(0);
+                    }
+                    if (sb.length() > 0) sb.append(" ");
+                    sb.append(w);
+                }
+                if (sb.length() > 0) chunks.add(sb.toString().trim());
             }
-
-            if (curType != -1 && charType != curType) {
-                list.add(new Segment(sb.toString(), curType));
-                sb.setLength(0);
-            }
-            curType = charType;
-            sb.appendCodePoint(cp);
         }
-        if (sb.length() > 0) list.add(new Segment(sb.toString(), curType == -1 ? 0 : curType));
-        return list;
-    }
-
-    private byte[] applyPitchShift(byte[] pcmBytes, float pitchFactor) {
-        if (pcmBytes == null || pcmBytes.length < 4 || Math.abs(pitchFactor - 1.0f) < 0.04f) {
-            return pcmBytes;
-        }
-        int totalSamples = pcmBytes.length / 2;
-        int outSamples = Math.max(1, (int) (totalSamples / pitchFactor));
-        byte[] outBytes = new byte[outSamples * 2];
-        for (int i = 0; i < outSamples; i++) {
-            int srcIdx = Math.min(totalSamples - 1, (int) (i * pitchFactor));
-            outBytes[i * 2] = pcmBytes[srcIdx * 2];
-            outBytes[i * 2 + 1] = pcmBytes[srcIdx * 2 + 1];
-        }
-        return outBytes;
+        if (chunks.isEmpty()) chunks.add(text);
+        return chunks;
     }
 
     @Override
     protected void onSynthesizeText(SynthesisRequest request, SynthesisCallback callback) {
+        isStopped = false;
         CharSequence cs = request.getCharSequenceText();
         if (TextUtils.isEmpty(cs)) {
             callback.done();
@@ -159,19 +203,30 @@ public class TtsService extends TextToSpeechService {
                 return;
             }
 
-            String secModel = resolveModelPath(prefs.getString("sec_voice_key", prefs.getString("sec_model_path", "")));
-            String numModel = resolveModelPath(prefs.getString("num_voice_key", prefs.getString("num_model_path", "")));
-            int engineMode = prefs.getInt("engine_mode", 0);
-            boolean hasSec = !secModel.isEmpty() && !secModel.equals(priModel);
-            boolean hasNum = !numModel.isEmpty() && !numModel.equals(priModel);
+            String espeakDataPath = PiperEngine.setupEspeakData(this);
+            if (!currentLoadedModel.equals(priModel)) {
+                if (piperEngine.initEngine(priModel, priModel + ".json", espeakDataPath)) {
+                    currentLoadedModel = priModel;
+                } else {
+                    callback.error();
+                    return;
+                }
+            }
 
+            boolean isIndic = priModel.contains("hi_") || priModel.contains("mr_") || priModel.contains("ne_") || priModel.contains("bn_") || priModel.contains("gu_") || priModel.contains("ta_") || priModel.contains("te_") || priModel.contains("kn_") || priModel.contains("ml_");
             int numMode = prefs.getInt("num_pos", 0);
             int puncMode = prefs.getInt("punc_pos", 0);
-            String processedText = applyNumberAndPunctuationRules(cs.toString(), numMode, puncMode);
+
+            String normalizedText = cleanAndNormalizeText(cs.toString(), isIndic, numMode, puncMode);
+            if (normalizedText.isEmpty()) {
+                callback.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1);
+                callback.done();
+                return;
+            }
 
             boolean forceSpeech = prefs.getBoolean("force_speech", false);
             float baseSpeed = forceSpeech ? (prefs.getInt("speech_rate", 50) / 50.0f) : (request.getSpeechRate() / 100.0f);
-            if (baseSpeed < 0.2f) baseSpeed = 0.2f;
+            if (baseSpeed < 0.25f) baseSpeed = 0.25f;
             if (baseSpeed > 4.0f) baseSpeed = 4.0f;
 
             boolean forcePitch = prefs.getBoolean("force_pitch", false);
@@ -179,46 +234,33 @@ public class TtsService extends TextToSpeechService {
             if (pitchFactor < 0.5f) pitchFactor = 0.5f;
             if (pitchFactor > 2.0f) pitchFactor = 2.0f;
 
-            float speedForPiper = baseSpeed / pitchFactor;
-            String espeakDataPath = PiperEngine.setupEspeakData(this);
+            // Use hardware sample rate for pitch so audio remains 100% distortion-free and crystal clear
+            int sampleRate = Math.max(8000, Math.min(48000, (int) (22050 * pitchFactor)));
+            float engineSpeed = baseSpeed / pitchFactor;
 
-            List<Segment> segments = splitSegments(processedText, engineMode, hasSec, hasNum);
-            callback.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1);
+            callback.start(sampleRate, AudioFormat.ENCODING_PCM_16BIT, 1);
+            int maxBufferSize = callback.getMaxBufferSize();
 
-            ByteArrayOutputStream fullAudio = new ByteArrayOutputStream();
-            for (Segment seg : segments) {
-                if (seg.text.trim().isEmpty()) continue;
-                String targetModel = priModel;
-                if (seg.type == 1 && hasSec) targetModel = secModel;
-                else if (seg.type == 2 && hasNum) targetModel = numModel;
-                String targetConfig = targetModel + ".json";
+            List<String> chunks = splitIntoFastChunks(normalizedText);
+            boolean wroteAnyAudio = false;
 
-                if (!currentLoadedModel.equals(targetModel)) {
-                    if (piperEngine.initEngine(targetModel, targetConfig, espeakDataPath)) {
-                        currentLoadedModel = targetModel;
-                    } else if (!targetModel.equals(priModel) && piperEngine.initEngine(priModel, priModel + ".json", espeakDataPath)) {
-                        currentLoadedModel = priModel;
-                    } else {
-                        continue;
+            for (String chunk : chunks) {
+                if (isStopped) break;
+                byte[] pcm = piperEngine.synthesizeText(chunk, engineSpeed);
+                if (pcm != null && pcm.length > 0) {
+                    wroteAnyAudio = true;
+                    int offset = 0;
+                    while (offset < pcm.length && !isStopped) {
+                        int bytesToWrite = Math.min(maxBufferSize, pcm.length - offset);
+                        callback.audioAvailable(pcm, offset, bytesToWrite);
+                        offset += bytesToWrite;
                     }
                 }
-                byte[] chunk = piperEngine.synthesizeText(seg.text, speedForPiper);
-                if (chunk != null && chunk.length > 0) {
-                    byte[] pitched = applyPitchShift(chunk, pitchFactor);
-                    try { fullAudio.write(pitched); } catch (Exception ignored) {}
-                }
             }
 
-            byte[] audioData = fullAudio.toByteArray();
-            if (audioData.length == 0) {
-                audioData = new byte[440];
-            }
-            int maxBufferSize = callback.getMaxBufferSize();
-            int offset = 0;
-            while (offset < audioData.length) {
-                int bytesToWrite = Math.min(maxBufferSize, audioData.length - offset);
-                callback.audioAvailable(audioData, offset, bytesToWrite);
-                offset += bytesToWrite;
+            if (!wroteAnyAudio && !isStopped) {
+                byte[] silence = new byte[320];
+                callback.audioAvailable(silence, 0, silence.length);
             }
             callback.done();
         }
@@ -226,6 +268,7 @@ public class TtsService extends TextToSpeechService {
 
     @Override
     public void onDestroy() {
+        isStopped = true;
         if (piperEngine != null) {
             piperEngine.destroyEngine();
             currentLoadedModel = "";
