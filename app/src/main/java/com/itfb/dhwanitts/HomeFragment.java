@@ -76,17 +76,13 @@ public class HomeFragment extends Fragment {
             @Override public void onStopTrackingTouch(SeekBar sb) {}
         });
 
-        spinnerLanguage.setOnTouchListener((v, event) -> {
-            userTouchedLang = true;
-            return false;
-        });
-
         spinnerLanguage.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
-                if (userTouchedLang && pos >= 0 && pos < downloadedLanguages.size()) {
-                    userTouchedLang = false;
-                    updateVoiceSpinners(downloadedLanguages.get(pos), "");
+                if (pos >= 0 && pos < downloadedLanguages.size()) {
+                    String selectedLang = downloadedLanguages.get(pos);
+                    String savedKey = prefs.getString("saved_voice_key", "");
+                    updateVoiceSpinners(selectedLang, savedKey);
                 }
             }
             @Override public void onNothingSelected(AdapterView<?> p) {}
@@ -156,7 +152,18 @@ public class HomeFragment extends Fragment {
                     } catch (Exception ignored) {}
                 } else if (key.contains("-")) {
                     String[] parts = key.split("-");
-                    langName = parts[0].toUpperCase();
+                    String codePart = parts[0].toLowerCase();
+                    if (codePart.startsWith("hi")) langName = "Hindi";
+                    else if (codePart.startsWith("en")) langName = "English";
+                    else if (codePart.startsWith("ne")) langName = "Nepali";
+                    else if (codePart.startsWith("mr")) langName = "Marathi";
+                    else if (codePart.startsWith("gu")) langName = "Gujarati";
+                    else if (codePart.startsWith("bn")) langName = "Bengali";
+                    else if (codePart.startsWith("ta")) langName = "Tamil";
+                    else if (codePart.startsWith("te")) langName = "Telugu";
+                    else if (codePart.startsWith("kn")) langName = "Kannada";
+                    else if (codePart.startsWith("ml")) langName = "Malayalam";
+                    else langName = parts[0].toUpperCase();
                     if (parts.length > 1) voiceName = parts[1];
                 }
 
