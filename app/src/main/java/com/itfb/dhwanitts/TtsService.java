@@ -199,7 +199,7 @@ public class TtsService extends TextToSpeechService {
         return o.trim();
     }
     private byte[] synthDual(String chunk, String mod, String esp, float spd) {
-        VoiceLangHelper.ensureValidConfig(new File(mod), new File(mod + ".json"));
+        VoiceLangHelper.tuneConfigForZeroStutter(new File(mod + ".json"), new File(mod).getName().replace(".onnx", ""));
         if (mod.equals(priMod)) return priEng.synthesizeText(chunk, spd);
         if (mod.equals(secMod)) return secEng.synthesizeText(chunk, spd);
         if (priMod.isEmpty()) {
@@ -274,7 +274,7 @@ public class TtsService extends TextToSpeechService {
 
             String esp = PiperEngine.setupEspeakData(this);
             if (!priMod.equals(userDef) && new File(userDef).exists()) {
-                VoiceLangHelper.ensureValidConfig(new File(userDef), new File(userDef + ".json"));
+                VoiceLangHelper.tuneConfigForZeroStutter(new File(userDef + ".json"), new File(userDef).getName().replace(".onnx", ""));
                 if (priEng.initEngine(userDef, userDef + ".json", esp)) priMod = userDef;
             }
             int rate = prefs != null ? prefs.getInt("speech_rate", 100) : 100;
