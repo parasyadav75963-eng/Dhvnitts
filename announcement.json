@@ -1,10 +1,10 @@
 {
-  "id": "alert_en_2",
-  "title": "Dhwani TTS: Developer Notice & Feedback",
-  "short_msg": "Hello! This app is under active development. Double tap to read our message and share your valuable feedback.",
-  "full_msg": "Warm greetings to all our users from Interested Technology for Blind!\n\nPlease note that Dhwani TTS is currently under active development. Because we are continuously working on new features and improvements, you might occasionally experience minor bugs or issues with certain voices.\n\nIf you face any problems or notice any voice issues, please report them and share your suggestions with the developer. Your feedback is extremely important to us and helps us make Dhwani TTS better, faster, and more accessible for everyone.\n\nThank you for your continuous support!",
-  "link": "https://github.com/parasyadav75963-eng/Dhvnitts/issues",
-  "latest_version": "1.7.0",
+  "id": "update_v171_live",
+  "title": "New Update Available (v1.7.1)!",
+  "short_msg": "A new faster Dhwani TTS update v1.7.1 is available! Double tap to view details and update now.",
+  "full_msg": "Greetings from Interested Technology for Blind!\n\nA new update of Dhwani TTS (v1.7.1) is now live with important fixes:\n1. Fixed the 0% stuck update download issue with fast auto-redirect support.\n2. Added fast Indian voices with anti-stutter phoneme tuning.\n3. Improved HD loudness and live 0% to 100% progress bar.\n\nTap 'Open Link / Download' below or use Check for Update to install the latest version!",
+  "link": "https://github.com/parasyadav75963-eng/Dhvnitts/releases/download/latest/DhwaniTTS.apk",
+  "latest_version": "1.7.1",
   "apk_url": "https://github.com/parasyadav75963-eng/Dhvnitts/releases/download/latest/DhwaniTTS.apk",
-  "update_notes": "Version 1.7.0 is live with Indian voices, anti-stutter phoneme support, and HD audio boost."
+  "update_notes": "Version 1.7.1 fixes the 0% update download bug and includes fast Indian voices with HD clarity. Update now!"
 }

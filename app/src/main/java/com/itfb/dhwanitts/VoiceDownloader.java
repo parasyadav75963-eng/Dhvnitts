@@ -2,6 +2,7 @@ package com.itfb.dhwanitts;
 
 import android.os.Handler;
 import android.os.Looper;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -12,53 +13,87 @@ import java.util.concurrent.Executors;
 
 public class VoiceDownloader {
     public interface DownloadListener {
-        void onProgress(int progress);
+        void onProgress(int percentage);
         void onSuccess();
-        void onError(String error);
+        void onError(String message);
     }
 
-    private static final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private static final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    public static void downloadVoice(String fileUrl, String destinationPath, DownloadListener listener) {
+    public void downloadFile(String fileUrl, String destinationPath, DownloadListener listener) {
         executor.execute(() -> {
+            HttpURLConnection connection = null;
             try {
-                URL url = new URL(fileUrl);
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.connect();
+                String currentUrl = fileUrl;
+                for (int i = 0; i < 6; i++) {
+                    URL url = new URL(currentUrl);
+                    connection = (HttpURLConnection) url.openConnection();
+                    connection.setInstanceFollowRedirects(true);
+                    connection.setConnectTimeout(15000);
+                    connection.setReadTimeout(30000);
+                    connection.setRequestProperty("User-Agent", "DhwaniTTS-Updater");
+                    connection.connect();
+                    int code = connection.getResponseCode();
+                    if (code == HttpURLConnection.HTTP_MOVED_PERM || code == HttpURLConnection.HTTP_MOVED_TEMP || code == HttpURLConnection.HTTP_SEE_OTHER || code == 307 || code == 308) {
+                        String loc = connection.getHeaderField("Location");
+                        connection.disconnect();
+                        if (loc != null && !loc.isEmpty()) {
+                            currentUrl = loc;
+                            continue;
+                        }
+                    }
+                    break;
+                }
 
                 int responseCode = connection.getResponseCode();
                 if (responseCode != HttpURLConnection.HTTP_OK) {
-                    // रिस्पॉन्स कोड को पहले एक स्ट्रिंग में सेव कर रहे हैं ताकि Lambda में एरर न आए
                     final String errorMsg = "Server returned HTTP " + responseCode;
                     mainHandler.post(() -> listener.onError(errorMsg));
                     return;
                 }
 
-                int fileLength = connection.getContentLength();
-                InputStream input = connection.getInputStream();
-                OutputStream output = new FileOutputStream(destinationPath);
+                long fileLength = connection.getContentLengthLong();
+                if (fileLength <= 0) {
+                    fileLength = 25L * 1024L * 1024L; // 25MB fallback for smooth progress
+                }
 
-                byte[] data = new byte[4096];
+                File destFile = new File(destinationPath);
+                if (destFile.getParentFile() != null && !destFile.getParentFile().exists()) {
+                    destFile.getParentFile().mkdirs();
+                }
+
+                InputStream input = connection.getInputStream();
+                OutputStream output = new FileOutputStream(destFile);
+
+                byte[] data = new byte[8192];
                 long total = 0;
                 int count;
+                int lastProg = -1;
                 while ((count = input.read(data)) != -1) {
                     total += count;
-                    if (fileLength > 0) {
-                        int progress = (int) (total * 100 / fileLength);
-                        mainHandler.post(() -> listener.onProgress(progress));
-                    }
                     output.write(data, 0, count);
+                    int progress = (int) ((total * 100L) / fileLength);
+                    if (progress > 99) progress = 99;
+                    if (progress != lastProg) {
+                        lastProg = progress;
+                        final int p = progress;
+                        mainHandler.post(() -> listener.onProgress(p));
+                    }
                 }
                 output.flush();
                 output.close();
                 input.close();
 
-                mainHandler.post(() -> listener.onSuccess());
-
+                mainHandler.post(() -> {
+                    listener.onProgress(100);
+                    listener.onSuccess();
+                });
             } catch (Exception e) {
                 final String exMsg = e.getMessage() != null ? e.getMessage() : "Unknown network error";
                 mainHandler.post(() -> listener.onError("Error: " + exMsg));
+            } finally {
+                if (connection != null) connection.disconnect();
             }
         });
     }
