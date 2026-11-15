@@ -94,7 +94,7 @@ public class VoiceLibraryFragment extends Fragment {
         try {
             JSONObject root = new JSONObject(jsonStr);
             Iterator<String> keys = root.keys();
-            List<VoiceModel> fetchedVoices = new ArrayList<>(VoiceLangHelper.getExtraIndianVoices(voicesDir));
+            List<VoiceModel> fetchedVoices = new ArrayList<>(VoiceLangHelper.getExtraIndianVoices(new File(requireContext().getFilesDir(), "voices")));
             File voicesDir = new File(requireContext().getFilesDir(), "voices");
 
             while (keys.hasNext()) {
