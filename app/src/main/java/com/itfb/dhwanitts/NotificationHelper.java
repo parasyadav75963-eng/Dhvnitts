@@ -190,4 +190,24 @@ public class NotificationHelper {
         }
         builder.show();
     }
+    public static void requestPermissionIfNeeded(Activity activity) {
+        if (Build.VERSION.SDK_INT >= 33 && activity != null) {
+            if (activity.checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+                activity.requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 101);
+            }
+        }
+    }
+
+    public static void checkForRemoteUpdatesAndAnnouncements(Activity activity) {
+        if (activity != null) {
+            View root = activity.findViewById(android.R.id.content);
+            checkForRemoteNotifications(activity, root);
+        }
+    }
+
+    public static void attachHomeBanner(View rootView) {
+        if (rootView != null && rootView.getContext() != null) {
+            attachHomeBanner(rootView.getContext(), rootView);
+        }
+    }
 }
