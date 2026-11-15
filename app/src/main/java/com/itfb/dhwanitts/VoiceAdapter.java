@@ -103,7 +103,7 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
     private void playRealPreview(String modelPath, String configPath, String text, Context context) {
         executorService.execute(() -> {
             try {
-                synchronized (PiperEngine.class) { PiperEngine engine = new PiperEngine();
+                PiperEngine engine = new PiperEngine();
                 if (engine.initEngine(modelPath, configPath, PiperEngine.setupEspeakData(context))) {
                     byte[] audioData = engine.synthesizeText(text, 1.0f);
                     if (audioData != null && audioData.length > 0) {
@@ -112,7 +112,7 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
                     } else {
                         mainHandler.post(() -> Toast.makeText(context, "Synthesis failed", Toast.LENGTH_SHORT).show());
                     }
-                    engine.destroyEngine(); }
+                    engine.destroyEngine();
                 } else {
                     mainHandler.post(() -> Toast.makeText(context, "Engine Init Failed!", Toast.LENGTH_LONG).show());
                 }
