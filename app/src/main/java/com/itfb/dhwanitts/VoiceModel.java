@@ -11,6 +11,8 @@ public class VoiceModel {
     private String sizeMB;
     private boolean isDownloaded;
 
+    private static final String PIPER_BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/main/";
+
     public VoiceModel(String key, String languageName, String country, String voiceName, String quality, String modelPath, String configPath, String sizeMB, boolean isDownloaded) {
         this.key = key;
         this.languageName = languageName;
@@ -27,10 +29,18 @@ public class VoiceModel {
     public String getLanguageName() { return languageName; }
     public String getCountry() { return country; }
     public String getVoiceName() { return voiceName; }
+    public String getName() { return languageName + " - " + voiceName; }
     public String getQuality() { return quality; }
     public String getModelPath() { return modelPath; }
     public String getConfigPath() { return configPath; }
+    public String getModelUrl() {
+        return (modelPath != null && modelPath.startsWith("http")) ? modelPath : PIPER_BASE + modelPath;
+    }
+    public String getConfigUrl() {
+        return (configPath != null && configPath.startsWith("http")) ? configPath : PIPER_BASE + configPath;
+    }
     public String getSizeMB() { return sizeMB; }
+    public String getSizeInfo() { return "Size: " + sizeMB + " | Country: " + country; }
     public boolean isDownloaded() { return isDownloaded; }
     public void setDownloaded(boolean downloaded) { isDownloaded = downloaded; }
 }

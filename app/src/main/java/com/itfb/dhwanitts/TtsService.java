@@ -1,251 +1,236 @@
 package com.itfb.dhwanitts;
-
-import android.content.Context;
-import android.content.SharedPreferences;
+import android.content.*;
 import android.media.AudioFormat;
-import android.speech.tts.SynthesisCallback;
-import android.speech.tts.SynthesisRequest;
-import android.speech.tts.TextToSpeech;
-import android.speech.tts.TextToSpeechService;
+import android.os.Build;
+import android.speech.tts.*;
 import android.text.TextUtils;
 import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class TtsService extends TextToSpeechService {
-    private PiperEngine piperEngine;
+    private PiperEngine priEng, secEng;
     private SharedPreferences prefs;
-    private String currentLoadedModel = "";
+    private String priMod = "", secMod = "";
     private volatile boolean isStopped = false;
 
-    @Override
-    public void onCreate() {
+    @Override public void onCreate() {
         super.onCreate();
         prefs = getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
-        piperEngine = new PiperEngine();
+        priEng = new PiperEngine(); secEng = new PiperEngine();
     }
-
-    @Override
-    protected int onIsLanguageAvailable(String lang, String country, String variant) {
-        return TextToSpeech.LANG_AVAILABLE;
+    @Override protected int onIsLanguageAvailable(String l, String c, String v) { return TextToSpeech.LANG_COUNTRY_AVAILABLE; }
+    @Override protected String[] onGetLanguage() { return new String[]{"hin", "IND", ""}; }
+    @Override protected int onLoadLanguage(String l, String c, String v) { return TextToSpeech.LANG_COUNTRY_AVAILABLE; }
+    @Override protected void onStop() { isStopped = true; }
+    @Override public List<Voice> onGetVoices() {
+        List<Voice> list = new ArrayList<>();
+        File[] files = new File(getFilesDir(), "voices").listFiles((d, n) -> n.endsWith(".onnx"));
+        if (files != null) {
+            for (File f : files) {
+                String k = f.getName().replace(".onnx", "");
+                String[] p = k.split("-")[0].split("_");
+                Locale loc = p.length >= 2 ? new Locale(p[0], p[1]) : new Locale(p[0]);
+                list.add(new Voice(k, loc, Voice.QUALITY_VERY_HIGH, Voice.LATENCY_VERY_LOW, false, new HashSet<>()));
+            }
+        }
+        if (list.isEmpty()) list.add(new Voice("default_dhwani", new Locale("hi", "IN"), 500, 100, false, new HashSet<>()));
+        return list;
     }
-
-    @Override
-    protected String[] onGetLanguage() {
-        return new String[]{"hin", "IND", ""};
+    @Override public int onIsValidVoiceName(String n) {
+        if (n == null || n.isEmpty()) return TextToSpeech.ERROR;
+        if ("default_dhwani".equals(n)) return TextToSpeech.SUCCESS;
+        String p = resolveModelPath(n);
+        return (!p.isEmpty() && new File(p).exists()) ? TextToSpeech.SUCCESS : TextToSpeech.ERROR;
     }
-
-    @Override
-    protected int onLoadLanguage(String lang, String country, String variant) {
-        return TextToSpeech.LANG_AVAILABLE;
+    @Override public int onLoadVoice(String n) { return onIsValidVoiceName(n); }
+    @Override public String onGetDefaultVoiceNameFor(String l, String c, String v) {
+        String s = prefs.getString("saved_voice_key", "");
+        if (!s.isEmpty()) return s.replace(".onnx", "");
+        File[] f = new File(getFilesDir(), "voices").listFiles((d, n) -> n.endsWith(".onnx"));
+        return (f != null && f.length > 0) ? f[0].getName().replace(".onnx", "") : "default_dhwani";
     }
-
-    @Override
-    protected void onStop() {
-        isStopped = true;
+    private String resolveModelPath(String k) {
+        if (k == null || k.isEmpty()) return "";
+        File d = new File(k);
+        if (d.exists()) return d.getAbsolutePath();
+        File v = new File(new File(getFilesDir(), "voices"), k.endsWith(".onnx") ? k : k + ".onnx");
+        return v.exists() ? v.getAbsolutePath() : "";
     }
-
-    private String resolveModelPath(String keyOrPath) {
-        if (keyOrPath == null || keyOrPath.isEmpty()) return "";
-        File direct = new File(keyOrPath);
-        if (direct.exists()) return direct.getAbsolutePath();
-        File inVoices = new File(new File(getFilesDir(), "voices"), keyOrPath.endsWith(".onnx") ? keyOrPath : keyOrPath + ".onnx");
-        if (inVoices.exists()) return inVoices.getAbsolutePath();
-        return "";
-    }
-
     private String getFallbackModel() {
-        File voicesDir = new File(getFilesDir(), "voices");
-        File[] files = voicesDir.listFiles((dir, name) -> name.endsWith(".onnx"));
-        if (files != null && files.length > 0) return files[0].getAbsolutePath();
+        File[] f = new File(getFilesDir(), "voices").listFiles((d, n) -> n.endsWith(".onnx"));
+        return (f != null && f.length > 0) ? f[0].getAbsolutePath() : "";
+    }
+    private String findModelForScript(String pfx, String defPath) {
+        if (pfx == null || pfx.isEmpty()) return defPath;
+        String defName = new File(defPath).getName();
+        if (defName.startsWith(pfx)) return defPath;
+        if ("hi_".equals(pfx) && (defName.startsWith("mr_") || defName.startsWith("ne_"))) return defPath;
+        String pref = prefs.getString("preferred_voice_" + pfx, "");
+        if (!pref.isEmpty()) {
+            String r = resolveModelPath(pref);
+            if (!r.isEmpty()) return r;
+        }
+        File[] files = new File(getFilesDir(), "voices").listFiles((d, n) -> n.endsWith(".onnx"));
+        if (files != null) {
+            for (File f : files) if (f.getName().startsWith(pfx)) return f.getAbsolutePath();
+        }
+        return defPath;
+    }
+    private String detectCharLang(char c) {
+        Character.UnicodeBlock b = Character.UnicodeBlock.of(c);
+        if (b == Character.UnicodeBlock.DEVANAGARI || b == Character.UnicodeBlock.DEVANAGARI_EXTENDED) return "hi_";
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) return "en_";
+        if (b == Character.UnicodeBlock.TELUGU) return "te_";
+        if (b == Character.UnicodeBlock.MALAYALAM) return "ml_";
+        if (b == Character.UnicodeBlock.TAMIL) return "ta_";
+        if (b == Character.UnicodeBlock.BENGALI) return "bn_";
+        if (b == Character.UnicodeBlock.GUJARATI) return "gu_";
+        if (b == Character.UnicodeBlock.KANNADA) return "kn_";
         return "";
     }
-
-    private String cleanAndNormalizeText(String input, int numMode, int puncMode) {
-        if (input == null || input.isEmpty()) return "";
-        String out = input;
-
-        // Split joined CamelCase words cleanly for screen readers
-        out = out.replaceAll("([a-z])([A-Z])", "$1 $2");
-        out = out.replaceAll("([A-Z]+)([A-Z][a-z])", "$1 $2");
-        out = out.replace("_", " ");
-
-        if (numMode == 1) {
-            out = out.replaceAll("(\\d)", "$1 ");
-        }
-
-        if (puncMode == 2) {
-            out = out.replace("@", " at ").replace("#", " hash ").replace("$", " dollar ")
-                     .replace("%", " percent ").replace("&", " and ").replace("*", " star ")
-                     .replace("+", " plus ").replace("=", " equals ").replace("/", " slash ");
-        } else if (puncMode == 3) {
-            out = out.replace(".", " dot ").replace(",", " comma ").replace("?", " question mark ")
-                     .replace("!", " exclamation ").replace(":", " colon ").replace(";", " semicolon ")
-                     .replace("@", " at ").replace("#", " hash ").replace("$", " dollar ")
-                     .replace("%", " percent ").replace("&", " and ").replace("*", " star ")
-                     .replace("+", " plus ").replace("-", " minus ").replace("=", " equals ")
-                     .replace("/", " slash ");
-        }
-
-        return out.replaceAll("\\s+", " ").trim();
-    }
-
-    private List<String> splitIntoFastChunks(String text) {
-        List<String> chunks = new ArrayList<>();
-        if (text.isEmpty()) return chunks;
-
-        String[] rawParts = text.split("(?<=[.!?।\\n;:—])\\s+");
-        for (String part : rawParts) {
-            String trimmed = part.trim();
-            if (trimmed.isEmpty()) continue;
-            if (trimmed.length() <= 160) {
-                chunks.add(trimmed);
+    private List<String[]> segmentByScript(String text, String defPfx) {
+        List<String[]> segs = new ArrayList<>();
+        if (text == null || text.isEmpty()) return segs;
+        StringBuilder sb = new StringBuilder();
+        String cur = "";
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            String det = detectCharLang(c);
+            if (det.isEmpty() || cur.isEmpty() || cur.equals(det)) {
+                if (!det.isEmpty() && cur.isEmpty()) cur = det;
+                sb.append(c);
             } else {
-                String[] words = trimmed.split("\\s+");
+                String s = sb.toString().trim();
+                if (!s.isEmpty()) segs.add(new String[]{s, cur});
+                sb.setLength(0); sb.append(c); cur = det;
+            }
+        }
+        String rem = sb.toString().trim();
+        if (!rem.isEmpty()) segs.add(new String[]{rem, cur.isEmpty() ? defPfx : cur});
+        return segs;
+    }
+    private String cleanAndNormalizeText(String in, int numMode, int puncMode) {
+        if (in == null || in.isEmpty()) return "";
+        String o = in.replaceAll("([a-z])([A-Z])", "$1 $2").replaceAll("([A-Z]+)([A-Z][a-z])", "$1 $2").replace("_", " ");
+        if (numMode == 1) o = o.replaceAll("(\\d)", "$1 ");
+        if (puncMode >= 2) {
+            o = o.replace("@", " at ").replace("#", " hash ").replace("$", " dollar ").replace("%", " percent ").replace("&", " and ").replace("*", " star ").replace("+", " plus ").replace("=", " equals ").replace("/", " slash ");
+        }
+        if (puncMode == 3) {
+            o = o.replace(".", " dot ").replace(",", " comma ").replace("?", " question mark ").replace("!", " exclamation ").replace(":", " colon ").replace(";", " semicolon ").replace("-", " minus ");
+        }
+        return o.replaceAll("\\s+", " ").trim();
+    }
+    private List<String> splitIntoFastChunks(String t) {
+        List<String> list = new ArrayList<>();
+        if (t.isEmpty()) return list;
+        String[] parts = t.split("(?<=[.!?।,\\n;:—])\\s+");
+        boolean first = true;
+        for (String p : parts) {
+            String tr = p.trim();
+            if (tr.isEmpty()) continue;
+            int max = first ? 40 : 120;
+            if (tr.length() <= max) { list.add(tr); first = false; }
+            else {
                 StringBuilder sb = new StringBuilder();
-                for (String w : words) {
-                    if (sb.length() + w.length() > 120 && sb.length() > 0) {
-                        chunks.add(sb.toString().trim());
-                        sb.setLength(0);
+                for (String w : tr.split("\\s+")) {
+                    if (sb.length() + w.length() > (first ? 38 : 100) && sb.length() > 0) {
+                        list.add(sb.toString().trim()); sb.setLength(0); first = false;
                     }
                     if (sb.length() > 0) sb.append(" ");
                     sb.append(w);
                 }
-                if (sb.length() > 0) chunks.add(sb.toString().trim());
+                if (sb.length() > 0) { list.add(sb.toString().trim()); first = false; }
             }
         }
-        if (chunks.isEmpty()) chunks.add(text);
-        return chunks;
+        if (list.isEmpty()) list.add(t);
+        return list;
     }
-
-    // Full Loudness + Crisp Consonant Clarity without Sibilant Distortion
     public static byte[] enhanceHdClarityAndLoudness(byte[] pcm) {
         if (pcm == null || pcm.length < 4) return pcm;
         int n = pcm.length / 2;
-
-        // Pass 1: Apply subtle High-Frequency Presence (Crisp S, Sh, T, K) and find true peak
-        float[] processed = new float[n];
-        float prev = 0f;
-        float maxPeak = 1.0f;
-
+        float[] proc = new float[n];
+        float prev = 0f, maxP = 1f;
         for (int i = 0; i < n; i++) {
             short s = (short) ((pcm[i * 2] & 0xFF) | (pcm[i * 2 + 1] << 8));
-            // 18% high-frequency clarity boost restores sharp consonants without lisping
-            float crisp = s + 0.18f * (s - prev);
-            prev = s;
-            processed[i] = crisp;
-            float abs = crisp < 0 ? -crisp : crisp;
-            if (abs > maxPeak) maxPeak = abs;
+            float c = s + 0.16f * (s - prev);
+            prev = s; proc[i] = c;
+            float a = c < 0 ? -c : c;
+            if (a > maxP) maxP = a;
         }
-
-        if (maxPeak < 100.0f) return pcm;
-
-        // Pass 2: True Linear Peak Normalization to 31,500 (96% Full Volume) with ZERO wave-crushing
-        float gain = 31500.0f / maxPeak;
-        if (gain < 1.35f) gain = 1.35f;
-        if (gain > 2.80f) gain = 2.80f;
-
+        if (maxP < 100f) return pcm;
+        float g = Math.max(1.35f, Math.min(2.75f, 31500f / maxP));
         byte[] out = new byte[pcm.length];
         for (int i = 0; i < n; i++) {
-            float val = processed[i] * gain;
-            if (val > 32600.0f) val = 32600.0f;
-            if (val < -32600.0f) val = -32600.0f;
-            short outSample = (short) val;
-            out[i * 2] = (byte) (outSample & 0xFF);
-            out[i * 2 + 1] = (byte) ((outSample >> 8) & 0xFF);
+            short v = (short) Math.max(-32600f, Math.min(32600f, proc[i] * g));
+            out[i * 2] = (byte) (v & 0xFF);
+            out[i * 2 + 1] = (byte) ((v >> 8) & 0xFF);
         }
         return out;
     }
-
-    @Override
-    protected void onSynthesizeText(SynthesisRequest request, SynthesisCallback callback) {
-        isStopped = false;
-        CharSequence cs = request.getCharSequenceText();
-        if (TextUtils.isEmpty(cs)) {
-            callback.done();
-            return;
+    private byte[] synthDual(String chunk, String mod, String esp, float spd) {
+        if (mod.equals(priMod)) return priEng.synthesizeText(chunk, spd);
+        if (mod.equals(secMod)) return secEng.synthesizeText(chunk, spd);
+        if (priMod.isEmpty()) {
+            if (priEng.initEngine(mod, mod + ".json", esp)) { priMod = mod; return priEng.synthesizeText(chunk, spd); }
+        } else {
+            if (secEng.initEngine(mod, mod + ".json", esp)) { secMod = mod; return secEng.synthesizeText(chunk, spd); }
         }
-
+        return null;
+    }
+    @Override protected void onSynthesizeText(SynthesisRequest req, SynthesisCallback cb) {
+        isStopped = false;
+        CharSequence cs = req.getCharSequenceText();
+        if (TextUtils.isEmpty(cs)) { cb.done(); return; }
         synchronized (PiperEngine.class) {
-            String savedVoiceKey = prefs.getString("saved_voice_key", "");
-            String priModel = resolveModelPath(savedVoiceKey);
-            if (priModel.isEmpty()) priModel = resolveModelPath(prefs.getString("saved_model_path", ""));
-            if (priModel.isEmpty()) priModel = getFallbackModel();
-
-            if (priModel.isEmpty() || !new File(priModel).exists()) {
-                callback.error();
-                return;
+            String reqV = (Build.VERSION.SDK_INT >= 21 && req.getVoiceName() != null) ? req.getVoiceName() : "";
+            String pri = (!reqV.isEmpty() && !"default_dhwani".equals(reqV)) ? resolveModelPath(reqV) : "";
+            if (pri.isEmpty()) pri = resolveModelPath(prefs.getString("saved_voice_key", ""));
+            if (pri.isEmpty()) pri = resolveModelPath(prefs.getString("saved_model_path", ""));
+            if (pri.isEmpty()) pri = getFallbackModel();
+            if (pri.isEmpty() || !new File(pri).exists()) { cb.error(); return; }
+            String esp = PiperEngine.setupEspeakData(this);
+            if (!priMod.equals(pri) && !secMod.equals(pri)) {
+                if (priEng.initEngine(pri, pri + ".json", esp)) priMod = pri;
+                else { cb.error(); return; }
             }
-
-            String espeakDataPath = PiperEngine.setupEspeakData(this);
-            if (!currentLoadedModel.equals(priModel)) {
-                if (piperEngine.initEngine(priModel, priModel + ".json", espeakDataPath)) {
-                    currentLoadedModel = priModel;
-                } else {
-                    callback.error();
-                    return;
-                }
-            }
-
-            int numMode = prefs.getInt("num_pos", 0);
-            int puncMode = prefs.getInt("punc_pos", 0);
-
-            String normalizedText = cleanAndNormalizeText(cs.toString(), numMode, puncMode);
-            if (normalizedText.isEmpty()) {
-                callback.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1);
-                callback.done();
-                return;
-            }
-
-            boolean forceSpeech = prefs.getBoolean("force_speech", false);
-            float baseSpeed = forceSpeech ? (prefs.getInt("speech_rate", 50) / 50.0f) : (request.getSpeechRate() / 100.0f);
-            if (baseSpeed < 0.25f) baseSpeed = 0.25f;
-            if (baseSpeed > 4.0f) baseSpeed = 4.0f;
-
-            boolean forcePitch = prefs.getBoolean("force_pitch", false);
-            float pitchFactor = forcePitch ? (0.5f + (prefs.getInt("pitch_rate", 50) / 100.0f)) : (request.getPitch() / 100.0f);
-            if (pitchFactor < 0.5f) pitchFactor = 0.5f;
-            if (pitchFactor > 2.0f) pitchFactor = 2.0f;
-
-            int sampleRate = Math.max(8000, Math.min(48000, (int) (22050 * pitchFactor)));
-            float engineSpeed = baseSpeed / pitchFactor;
-
-            callback.start(sampleRate, AudioFormat.ENCODING_PCM_16BIT, 1);
-            int maxBufferSize = callback.getMaxBufferSize();
-
-            List<String> chunks = splitIntoFastChunks(normalizedText);
-            boolean wroteAnyAudio = false;
-
-            for (String chunk : chunks) {
+            String norm = cleanAndNormalizeText(cs.toString(), prefs.getInt("num_pos", 0), prefs.getInt("punc_pos", 0));
+            if (norm.isEmpty()) { cb.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1); cb.done(); return; }
+            float spd = prefs.getBoolean("force_speech", false) ? (prefs.getInt("speech_rate", 50) / 50f) : (req.getSpeechRate() / 100f);
+            spd = Math.max(0.25f, Math.min(4.0f, spd));
+            float pitch = prefs.getBoolean("force_pitch", false) ? (0.5f + (prefs.getInt("pitch_rate", 50) / 100f)) : (req.getPitch() / 100f);
+            pitch = Math.max(0.5f, Math.min(2.0f, pitch));
+            int sr = Math.max(8000, Math.min(48000, (int) (22050 * pitch)));
+            cb.start(sr, AudioFormat.ENCODING_PCM_16BIT, 1);
+            int maxB = cb.getMaxBufferSize();
+            String defPfx = new File(pri).getName().substring(0, Math.min(3, new File(pri).getName().length()));
+            List<String[]> segs = segmentByScript(norm, defPfx);
+            boolean wrote = false;
+            for (String[] seg : segs) {
                 if (isStopped) break;
-                byte[] rawPcm = piperEngine.synthesizeText(chunk, engineSpeed);
-                if (rawPcm != null && rawPcm.length > 0) {
-                    byte[] pcm = enhanceHdClarityAndLoudness(rawPcm);
-                    wroteAnyAudio = true;
-                    int offset = 0;
-                    while (offset < pcm.length && !isStopped) {
-                        int bytesToWrite = Math.min(maxBufferSize, pcm.length - offset);
-                        callback.audioAvailable(pcm, offset, bytesToWrite);
-                        offset += bytesToWrite;
+                String target = findModelForScript(seg[1], pri);
+                for (String ch : splitIntoFastChunks(seg[0])) {
+                    if (isStopped) break;
+                    byte[] raw = synthDual(ch, target, esp, spd / pitch);
+                    if (raw != null && raw.length > 0) {
+                        byte[] pcm = enhanceHdClarityAndLoudness(raw);
+                        wrote = true;
+                        for (int off = 0; off < pcm.length && !isStopped; ) {
+                            int len = Math.min(maxB, pcm.length - off);
+                            cb.audioAvailable(pcm, off, len);
+                            off += len;
+                        }
                     }
                 }
             }
-
-            if (!wroteAnyAudio && !isStopped) {
-                byte[] silence = new byte[320];
-                callback.audioAvailable(silence, 0, silence.length);
-            }
-            callback.done();
+            if (!wrote && !isStopped) { byte[] sil = new byte[320]; cb.audioAvailable(sil, 0, sil.length); }
+            cb.done();
         }
     }
-
-    @Override
-    public void onDestroy() {
+    @Override public void onDestroy() {
         isStopped = true;
-        if (piperEngine != null) {
-            piperEngine.destroyEngine();
-            currentLoadedModel = "";
-        }
+        if (priEng != null) { priEng.destroyEngine(); priMod = ""; }
+        if (secEng != null) { secEng.destroyEngine(); secMod = ""; }
         super.onDestroy();
     }
 }

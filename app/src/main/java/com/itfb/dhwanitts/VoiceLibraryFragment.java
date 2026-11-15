@@ -94,7 +94,7 @@ public class VoiceLibraryFragment extends Fragment {
         try {
             JSONObject root = new JSONObject(jsonStr);
             Iterator<String> keys = root.keys();
-            List<VoiceModel> fetchedVoices = new ArrayList<>();
+            List<VoiceModel> fetchedVoices = new ArrayList<>(VoiceLangHelper.getExtraIndianVoices(voicesDir));
             File voicesDir = new File(requireContext().getFilesDir(), "voices");
 
             while (keys.hasNext()) {
@@ -133,7 +133,8 @@ public class VoiceLibraryFragment extends Fragment {
                 fetchedVoices.add(new VoiceModel(key, langEnglish, country, voiceName, quality, modelPath, configPath, sizeMB, isDownloaded));
             }
 
-            mainHandler.post(() -> {
+            VoiceLangHelper.sortVoicesIndianFirst(fetchedVoices);
+                mainHandler.post(() -> {
                 voiceList.clear();
                 voiceList.addAll(fetchedVoices);
                 adapter.notifyDataSetChanged();

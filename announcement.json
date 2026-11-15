@@ -1,0 +1,10 @@
+{
+  "id": "welcome_v170",
+  "title": "Dhwani TTS HD Update",
+  "short_msg": "Auto language switching & HD loudness booster enabled! Double tap for details.",
+  "full_msg": "Welcome to the new Dhwani TTS by Interested Technology for Blind!\n\n1. Zero-latency automatic language switching (Hindi, English, Marathi, Telugu, Malayalam & more).\n2. Crystal clear HD loudness without distortion.\n3. Live 0% to 100% voice download progress bar.\n4. Full support for Auto TTS, external apps, and games.",
+  "link": "https://github.com/parasyadav75963-eng/Dhvnitts/releases",
+  "latest_version": "1.7.0",
+  "apk_url": "https://github.com/parasyadav75963-eng/Dhvnitts/releases/download/latest/DhwaniTTS.apk",
+  "update_notes": "Version 1.7.0 is live with Auto Language Switching, HD Loudness Booster, and Live Download Progress!"
+}
