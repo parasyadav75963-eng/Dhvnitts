@@ -10,8 +10,8 @@ android {
         applicationId "com.itfb.dhwanitts"
         minSdk 24
         targetSdk 34
-        versionCode 18
-        versionName "1.7.1"
+        versionCode 8
+        versionName "1.8.0"
 
         // NDK के लिए सिर्फ 64-bit Android (arm64) को टारगेट करना
         ndk {

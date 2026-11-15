@@ -1,224 +1,311 @@
 package com.itfb.dhwanitts;
-import android.content.*;
+
+import android.content.SharedPreferences;
 import android.media.AudioFormat;
 import android.os.Build;
-import android.speech.tts.*;
+import android.speech.tts.SynthesisCallback;
+import android.speech.tts.SynthesisRequest;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.TextToSpeechService;
+import android.speech.tts.Voice;
 import android.text.TextUtils;
 import java.io.File;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 public class TtsService extends TextToSpeechService {
     private PiperEngine priEng, secEng;
-    private SharedPreferences prefs;
     private String priMod = "", secMod = "";
     private volatile boolean isStopped = false;
+    private SharedPreferences prefs;
 
     @Override public void onCreate() {
         super.onCreate();
-        prefs = getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
-        priEng = new PiperEngine(); secEng = new PiperEngine();
+        prefs = getSharedPreferences("DhwaniTTS_Prefs", MODE_PRIVATE);
+        priEng = new PiperEngine();
+        secEng = new PiperEngine();
+        NotificationHelper.checkInBackground(this);
     }
-    @Override protected int onIsLanguageAvailable(String l, String c, String v) { return TextToSpeech.LANG_COUNTRY_AVAILABLE; }
-    @Override protected String[] onGetLanguage() { return new String[]{"hin", "IND", ""}; }
-    @Override protected int onLoadLanguage(String l, String c, String v) { return TextToSpeech.LANG_COUNTRY_AVAILABLE; }
+
     @Override protected void onStop() { isStopped = true; }
-    @Override public List<Voice> onGetVoices() {
-        List<Voice> list = new ArrayList<>();
-        File[] files = new File(getFilesDir(), "voices").listFiles((d, n) -> n.endsWith(".onnx"));
-        if (files != null) {
-            for (File f : files) {
-                String k = f.getName().replace(".onnx", "");
-                String[] p = k.split("-")[0].split("_");
-                Locale loc = p.length >= 2 ? new Locale(p[0], p[1]) : new Locale(p[0]);
-                list.add(new Voice(k, loc, Voice.QUALITY_VERY_HIGH, Voice.LATENCY_VERY_LOW, false, new HashSet<>()));
+    private Locale getCleanLocaleForFilename(String f) {
+        String l = f.toLowerCase(Locale.ROOT);
+        if (l.startsWith("en_in") || l.contains("-en_in")) return new Locale("en", "IN");
+        if (l.startsWith("en_gb") || l.contains("-en_gb")) return new Locale("en", "GB");
+        if (l.startsWith("en_") || l.startsWith("en-")) return new Locale("en", "US");
+        String[] codes = {"hi","mr","te","ta","ml","bn","gu","kn","pa","or","as","sa","ur"};
+        for (String c : codes) {
+            if (l.startsWith(c + "_") || l.startsWith(c + "-")) return new Locale(c, "IN");
+        }
+        if (l.startsWith("ne_") || l.startsWith("ne-")) return new Locale("ne", "NP");
+        String[] p = f.split("[-_]");
+        if (p.length >= 2 && p[0].length() == 2 && p[1].length() == 2) {
+            return new Locale(p[0].toLowerCase(Locale.ROOT), p[1].toUpperCase(Locale.ROOT));
+        }
+        return new Locale("en", "US");
+    }
+
+    private List<File> getInstalledModelFiles() {
+        List<File> m = new ArrayList<>();
+        File d = new File(getFilesDir(), "voices");
+        File[] fs = d.listFiles();
+        if (fs != null) {
+            for (File f : fs) {
+                if (f.isFile() && f.getName().endsWith(".onnx") && f.length() > 100000) m.add(f);
             }
         }
-        if (list.isEmpty()) list.add(new Voice("default_dhwani", new Locale("hi", "IN"), 500, 100, false, new HashSet<>()));
+        Collections.sort(m, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
+        return m;
+    }
+
+    @Override public List<Voice> onGetVoices() {
+        List<Voice> list = new ArrayList<>();
+        if (Build.VERSION.SDK_INT >= 21) {
+            Set<String> feat = new HashSet<>();
+            for (File f : getInstalledModelFiles()) {
+                String k = f.getName().replace(".onnx", "");
+                list.add(new Voice(k, getCleanLocaleForFilename(k), 500, 100, false, feat));
+            }
+            if (list.isEmpty()) list.add(new Voice("en_US-lessac-medium", new Locale("en", "US"), 500, 100, false, feat));
+        }
         return list;
     }
     @Override public int onIsValidVoiceName(String n) {
-        if (n == null || n.isEmpty()) return TextToSpeech.ERROR;
-        if ("default_dhwani".equals(n)) return TextToSpeech.SUCCESS;
+        if (TextUtils.isEmpty(n)) return TextToSpeech.ERROR;
         String p = resolveModelPath(n);
-        return (!p.isEmpty() && new File(p).exists()) ? TextToSpeech.SUCCESS : TextToSpeech.ERROR;
+        if (!p.isEmpty() && new File(p).exists()) return TextToSpeech.SUCCESS;
+        return !getInstalledModelFiles().isEmpty() ? TextToSpeech.SUCCESS : TextToSpeech.ERROR;
     }
+
     @Override public int onLoadVoice(String n) { return onIsValidVoiceName(n); }
+
     @Override public String onGetDefaultVoiceNameFor(String l, String c, String v) {
-        String s = prefs.getString("saved_voice_key", "");
-        if (!s.isEmpty()) return s.replace(".onnx", "");
-        File[] f = new File(getFilesDir(), "voices").listFiles((d, n) -> n.endsWith(".onnx"));
-        return (f != null && f.length > 0) ? f[0].getName().replace(".onnx", "") : "default_dhwani";
-    }
-    private String resolveModelPath(String k) {
-        if (k == null || k.isEmpty()) return "";
-        File d = new File(k);
-        if (d.exists()) return d.getAbsolutePath();
-        File v = new File(new File(getFilesDir(), "voices"), k.endsWith(".onnx") ? k : k + ".onnx");
-        return v.exists() ? v.getAbsolutePath() : "";
-    }
-    private String getFallbackModel() {
-        File[] f = new File(getFilesDir(), "voices").listFiles((d, n) -> n.endsWith(".onnx"));
-        return (f != null && f.length > 0) ? f[0].getAbsolutePath() : "";
-    }
-    private String findModelForScript(String pfx, String defPath) {
-        if (pfx == null || pfx.isEmpty()) return defPath;
-        String defName = new File(defPath).getName();
-        if (defName.startsWith(pfx)) return defPath;
-        if ("hi_".equals(pfx) && (defName.startsWith("mr_") || defName.startsWith("ne_"))) return defPath;
-        String pref = prefs.getString("preferred_voice_" + pfx, "");
-        if (!pref.isEmpty()) {
-            String r = resolveModelPath(pref);
-            if (!r.isEmpty()) return r;
+        String iso = normalizeLangToIso2(l);
+        for (File f : getInstalledModelFiles()) {
+            String k = f.getName().replace(".onnx", "");
+            if (getCleanLocaleForFilename(k).getLanguage().equalsIgnoreCase(iso)) return k;
         }
-        File[] files = new File(getFilesDir(), "voices").listFiles((d, n) -> n.endsWith(".onnx"));
-        if (files != null) {
-            for (File f : files) if (f.getName().startsWith(pfx)) return f.getAbsolutePath();
+        String s = prefs != null ? prefs.getString("saved_voice_key", "") : "";
+        if (!s.isEmpty() && !resolveModelPath(s).isEmpty()) return s;
+        List<File> all = getInstalledModelFiles();
+        return all.isEmpty() ? "en_US-lessac-medium" : all.get(0).getName().replace(".onnx", "");
+    }
+
+    private String normalizeLangToIso2(String l) {
+        if (l == null || l.isEmpty()) return "en";
+        String s = l.toLowerCase(Locale.ROOT).trim();
+        String[][] map = {{"eng","en"},{"hin","hi"},{"mar","mr"},{"tel","te"},{"tam","ta"},{"mal","ml"},{"ben","bn"},{"guj","gu"},{"kan","kn"},{"pan","pa"},{"ori","or"},{"ory","or"},{"asm","as"},{"san","sa"},{"nep","ne"},{"urd","ur"}};
+        for (String[] m : map) if (s.startsWith(m[0]) || s.equals(m[1])) return m[1];
+        return s.length() >= 2 ? s.substring(0, 2) : "en";
+    }
+
+    @Override protected String[] onGetLanguage() { return new String[]{"eng", "USA", ""}; }
+
+    @Override protected int onIsLanguageAvailable(String l, String c, String v) {
+        String iso = normalizeLangToIso2(l);
+        for (File f : getInstalledModelFiles()) {
+            if (getCleanLocaleForFilename(f.getName()).getLanguage().equalsIgnoreCase(iso)) return TextToSpeech.LANG_COUNTRY_AVAILABLE;
+        }
+        return !getInstalledModelFiles().isEmpty() ? TextToSpeech.LANG_AVAILABLE : TextToSpeech.LANG_MISSING_DATA;
+    }
+
+    @Override protected int onLoadLanguage(String l, String c, String v) { return onIsLanguageAvailable(l, c, v); }
+    private String resolveModelPath(String k) {
+        if (TextUtils.isEmpty(k)) return "";
+        File d = new File(k);
+        if (d.exists() && d.isFile()) return d.getAbsolutePath();
+        File f = new File(new File(getFilesDir(), "voices"), k.endsWith(".onnx") ? k : k + ".onnx");
+        return f.exists() ? f.getAbsolutePath() : "";
+    }
+
+    private String getFallbackModel() {
+        List<File> list = getInstalledModelFiles();
+        for (File f : list) {
+            if (getCleanLocaleForFilename(f.getName()).getLanguage().equals("en")) return f.getAbsolutePath();
+        }
+        return list.isEmpty() ? "" : list.get(0).getAbsolutePath();
+    }
+
+    private String findModelForScript(String langCode, String defPath) {
+        if (TextUtils.isEmpty(langCode)) return defPath;
+        String iso = normalizeLangToIso2(langCode);
+        if (getCleanLocaleForFilename(new File(defPath).getName()).getLanguage().equalsIgnoreCase(iso)) return defPath;
+        for (File f : getInstalledModelFiles()) {
+            if (getCleanLocaleForFilename(f.getName()).getLanguage().equalsIgnoreCase(iso)) return f.getAbsolutePath();
         }
         return defPath;
     }
+
     private String detectCharLang(char c) {
         Character.UnicodeBlock b = Character.UnicodeBlock.of(c);
-        if (b == Character.UnicodeBlock.DEVANAGARI || b == Character.UnicodeBlock.DEVANAGARI_EXTENDED) return "hi_";
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) return "en_";
-        if (b == Character.UnicodeBlock.TELUGU) return "te_";
-        if (b == Character.UnicodeBlock.MALAYALAM) return "ml_";
-        if (b == Character.UnicodeBlock.TAMIL) return "ta_";
-        if (b == Character.UnicodeBlock.BENGALI) return "bn_";
-        if (b == Character.UnicodeBlock.GUJARATI) return "gu_";
-        if (b == Character.UnicodeBlock.KANNADA) return "kn_";
+        if (b == Character.UnicodeBlock.DEVANAGARI || b == Character.UnicodeBlock.DEVANAGARI_EXTENDED) return "hi";
+        if (b == Character.UnicodeBlock.BENGALI) return "bn";
+        if (b == Character.UnicodeBlock.GURMUKHI) return "pa";
+        if (b == Character.UnicodeBlock.GUJARATI) return "gu";
+        if (b == Character.UnicodeBlock.ORIYA) return "or";
+        if (b == Character.UnicodeBlock.TAMIL) return "ta";
+        if (b == Character.UnicodeBlock.TELUGU) return "te";
+        if (b == Character.UnicodeBlock.KANNADA) return "kn";
+        if (b == Character.UnicodeBlock.MALAYALAM) return "ml";
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) return "en";
         return "";
     }
-    private List<String[]> segmentByScript(String text, String defPfx) {
+    private List<String[]> segmentByScript(String text, String defaultLang) {
         List<String[]> segs = new ArrayList<>();
-        if (text == null || text.isEmpty()) return segs;
+        if (TextUtils.isEmpty(text)) return segs;
         StringBuilder sb = new StringBuilder();
         String cur = "";
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
             String det = detectCharLang(c);
-            if (det.isEmpty() || cur.isEmpty() || cur.equals(det)) {
-                if (!det.isEmpty() && cur.isEmpty()) cur = det;
+            if (det.isEmpty()) {
+                sb.append(c);
+            } else if (cur.isEmpty() || cur.equals(det)) {
+                cur = det;
                 sb.append(c);
             } else {
                 String s = sb.toString().trim();
                 if (!s.isEmpty()) segs.add(new String[]{s, cur});
-                sb.setLength(0); sb.append(c); cur = det;
+                sb.setLength(0);
+                sb.append(c);
+                cur = det;
             }
         }
         String rem = sb.toString().trim();
-        if (!rem.isEmpty()) segs.add(new String[]{rem, cur.isEmpty() ? defPfx : cur});
+        if (!rem.isEmpty()) segs.add(new String[]{rem, cur.isEmpty() ? defaultLang : cur});
         return segs;
     }
-    private String cleanAndNormalizeText(String in, int numMode, int puncMode) {
-        if (in == null || in.isEmpty()) return "";
-        String o = in.replaceAll("([a-z])([A-Z])", "$1 $2").replaceAll("([A-Z]+)([A-Z][a-z])", "$1 $2").replace("_", " ");
-        if (numMode == 1) o = o.replaceAll("(\\d)", "$1 ");
-        if (puncMode >= 2) {
-            o = o.replace("@", " at ").replace("#", " hash ").replace("$", " dollar ").replace("%", " percent ").replace("&", " and ").replace("*", " star ").replace("+", " plus ").replace("=", " equals ").replace("/", " slash ");
+
+    private List<String> splitIntoFastChunks(String text) {
+        List<String> out = new ArrayList<>();
+        if (TextUtils.isEmpty(text)) return out;
+        for (String p : text.split("(?<=[.!?।\\n,;:])\\s+")) {
+            String t = p.trim();
+            if (!t.isEmpty()) out.add(t);
         }
-        if (puncMode == 3) {
-            o = o.replace(".", " dot ").replace(",", " comma ").replace("?", " question mark ").replace("!", " exclamation ").replace(":", " colon ").replace(";", " semicolon ").replace("-", " minus ");
-        }
-        return o.replaceAll("\\s+", " ").trim();
-    }
-    private List<String> splitIntoFastChunks(String t) {
-        List<String> list = new ArrayList<>();
-        if (t.isEmpty()) return list;
-        String[] parts = t.split("(?<=[.!?।,\\n;:—])\\s+");
-        boolean first = true;
-        for (String p : parts) {
-            String tr = p.trim();
-            if (tr.isEmpty()) continue;
-            int max = first ? 40 : 120;
-            if (tr.length() <= max) { list.add(tr); first = false; }
-            else {
-                StringBuilder sb = new StringBuilder();
-                for (String w : tr.split("\\s+")) {
-                    if (sb.length() + w.length() > (first ? 38 : 100) && sb.length() > 0) {
-                        list.add(sb.toString().trim()); sb.setLength(0); first = false;
-                    }
-                    if (sb.length() > 0) sb.append(" ");
-                    sb.append(w);
-                }
-                if (sb.length() > 0) { list.add(sb.toString().trim()); first = false; }
-            }
-        }
-        if (list.isEmpty()) list.add(t);
-        return list;
-    }
-    public static byte[] enhanceHdClarityAndLoudness(byte[] pcm) {
-        if (pcm == null || pcm.length < 4) return pcm;
-        int n = pcm.length / 2;
-        float[] proc = new float[n];
-        float prev = 0f, maxP = 1f;
-        for (int i = 0; i < n; i++) {
-            short s = (short) ((pcm[i * 2] & 0xFF) | (pcm[i * 2 + 1] << 8));
-            float c = s + 0.16f * (s - prev);
-            prev = s; proc[i] = c;
-            float a = c < 0 ? -c : c;
-            if (a > maxP) maxP = a;
-        }
-        if (maxP < 100f) return pcm;
-        float g = Math.max(1.35f, Math.min(2.75f, 31500f / maxP));
-        byte[] out = new byte[pcm.length];
-        for (int i = 0; i < n; i++) {
-            short v = (short) Math.max(-32600f, Math.min(32600f, proc[i] * g));
-            out[i * 2] = (byte) (v & 0xFF);
-            out[i * 2 + 1] = (byte) ((v >> 8) & 0xFF);
-        }
+        if (out.isEmpty() && !text.trim().isEmpty()) out.add(text.trim());
         return out;
     }
+
+    private String cleanAndNormalizeText(String in, int numMode, int puncMode) {
+        if (TextUtils.isEmpty(in)) return "";
+        String o = in.replaceAll("([a-z])([A-Z])", "$1 $2").replace("_", " ").replaceAll("\\s+", " ").trim();
+        if (numMode == 1) o = o.replaceAll("(\\d)", " $1 ");
+        if (puncMode == 0) o = o.replaceAll("[*#~^`|<>{}\\[\\]\\\\]", " ");
+        return o.trim();
+    }
     private byte[] synthDual(String chunk, String mod, String esp, float spd) {
+        VoiceLangHelper.ensureValidConfig(new File(mod), new File(mod + ".json"));
         if (mod.equals(priMod)) return priEng.synthesizeText(chunk, spd);
         if (mod.equals(secMod)) return secEng.synthesizeText(chunk, spd);
         if (priMod.isEmpty()) {
-            if (priEng.initEngine(mod, mod + ".json", esp)) { priMod = mod; return priEng.synthesizeText(chunk, spd); }
+            if (priEng.initEngine(mod, mod + ".json", esp)) {
+                priMod = mod;
+                return priEng.synthesizeText(chunk, spd);
+            }
         } else {
-            if (secEng.initEngine(mod, mod + ".json", esp)) { secMod = mod; return secEng.synthesizeText(chunk, spd); }
+            if (secEng.initEngine(mod, mod + ".json", esp)) {
+                secMod = mod;
+                return secEng.synthesizeText(chunk, spd);
+            }
         }
         return null;
     }
+
+    private byte[] enhanceHdClarityAndLoudness(byte[] rawPcm) {
+        if (rawPcm == null || rawPcm.length < 4) return rawPcm;
+        int n = rawPcm.length / 2;
+        short[] s = new short[n];
+        for (int i = 0; i < n; i++) {
+            s[i] = (short) (((rawPcm[i * 2 + 1]) << 8) | (rawPcm[i * 2] & 0xFF));
+        }
+        int st = 0, en = n - 1, thr = 180;
+        while (st < n - 160 && Math.abs(s[st]) < thr) st++;
+        st = Math.max(0, st - 64);
+        while (en > st + 320 && Math.abs(s[en]) < thr) en--;
+        en = Math.min(n - 1, en + 160);
+        int len = en - st + 1;
+        if (len <= 0) return new byte[0];
+
+        float[] proc = new float[len];
+        float peak = 1.0f, prev = 0f;
+        for (int i = 0; i < len; i++) {
+            float cur = s[st + i];
+            float crisp = cur - (0.18f * prev);
+            prev = cur;
+            proc[i] = crisp;
+            if (Math.abs(crisp) > peak) peak = Math.abs(crisp);
+        }
+        int boost = prefs != null ? prefs.getInt("volume_boost", 100) : 100;
+        float gain = Math.max(0.8f, Math.min(3.2f, (27500.0f / peak) * (boost / 100.0f)));
+        byte[] out = new byte[len * 2];
+        for (int i = 0; i < len; i++) {
+            float v = proc[i] * gain;
+            if (v > 28000f) v = 28000f + (float) Math.tanh((v - 28000f) / 8000f) * 4700f;
+            else if (v < -28000f) v = -28000f - (float) Math.tanh((-v - 28000f) / 8000f) * 4700f;
+            int pcm = Math.max(-32760, Math.min(32760, Math.round(v)));
+            out[i * 2] = (byte) (pcm & 0xFF);
+            out[i * 2 + 1] = (byte) ((pcm >> 8) & 0xFF);
+        }
+        return out;
+    }
     @Override protected void onSynthesizeText(SynthesisRequest req, SynthesisCallback cb) {
         isStopped = false;
+        NotificationHelper.checkInBackground(this);
         CharSequence cs = req.getCharSequenceText();
-        if (TextUtils.isEmpty(cs)) { cb.done(); return; }
+        if (TextUtils.isEmpty(cs)) {
+            cb.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1);
+            cb.done();
+            return;
+        }
         synchronized (PiperEngine.class) {
+            String userDef = prefs != null ? resolveModelPath(prefs.getString("saved_voice_key", "")) : "";
+            if (userDef.isEmpty() && prefs != null) userDef = resolveModelPath(prefs.getString("saved_model_path", ""));
+            if (userDef.isEmpty()) userDef = getFallbackModel();
+
             String reqV = (Build.VERSION.SDK_INT >= 21 && req.getVoiceName() != null) ? req.getVoiceName() : "";
             String pri = (!reqV.isEmpty() && !"default_dhwani".equals(reqV)) ? resolveModelPath(reqV) : "";
-            if (pri.isEmpty()) pri = resolveModelPath(prefs.getString("saved_voice_key", ""));
-            if (pri.isEmpty()) pri = resolveModelPath(prefs.getString("saved_model_path", ""));
-            if (pri.isEmpty()) pri = getFallbackModel();
+            if (pri.isEmpty()) pri = userDef;
             if (pri.isEmpty() || !new File(pri).exists()) { cb.error(); return; }
+
             String esp = PiperEngine.setupEspeakData(this);
-            if (!priMod.equals(pri) && !secMod.equals(pri)) {
-                if (priEng.initEngine(pri, pri + ".json", esp)) priMod = pri;
-                else { cb.error(); return; }
+            if (!priMod.equals(userDef) && new File(userDef).exists()) {
+                VoiceLangHelper.ensureValidConfig(new File(userDef), new File(userDef + ".json"));
+                if (priEng.initEngine(userDef, userDef + ".json", esp)) priMod = userDef;
             }
-            String norm = cleanAndNormalizeText(cs.toString(), prefs.getInt("num_pos", 0), prefs.getInt("punc_pos", 0));
-            if (norm.isEmpty()) { cb.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1); cb.done(); return; }
-            float spd = prefs.getBoolean("force_speech", false) ? (prefs.getInt("speech_rate", 50) / 50f) : (req.getSpeechRate() / 100f);
-            spd = Math.max(0.25f, Math.min(4.0f, spd));
-            float pitch = prefs.getBoolean("force_pitch", false) ? (0.5f + (prefs.getInt("pitch_rate", 50) / 100f)) : (req.getPitch() / 100f);
-            pitch = Math.max(0.5f, Math.min(2.0f, pitch));
-            int sr = Math.max(8000, Math.min(48000, (int) (22050 * pitch)));
-            cb.start(sr, AudioFormat.ENCODING_PCM_16BIT, 1);
-            int maxB = cb.getMaxBufferSize();
-            String defPfx = new File(pri).getName().substring(0, Math.min(3, new File(pri).getName().length()));
-            List<String[]> segs = segmentByScript(norm, defPfx);
+            int rate = prefs != null ? prefs.getInt("speech_rate", 100) : 100;
+            int sysRate = req.getSpeechRate();
+            float comb = (rate / 100f) * (sysRate > 0 ? (sysRate / 100f) : 1f);
+            float spd = Math.max(0.45f, Math.min(2.2f, 1.0f / Math.max(0.35f, comb)));
+
+            int numM = prefs != null ? prefs.getInt("number_mode", 0) : 0;
+            int puncM = prefs != null ? prefs.getInt("punctuation_mode", 0) : 0;
+            String norm = cleanAndNormalizeText(cs.toString(), numM, puncM);
+
+            cb.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1);
+            int maxB = cb.getMaxBufferSize() > 0 ? cb.getMaxBufferSize() : 4096;
+            String baseIso = getCleanLocaleForFilename(new File(pri).getName()).getLanguage();
             boolean wrote = false;
-            for (String[] seg : segs) {
+
+            for (String[] seg : segmentByScript(norm, baseIso)) {
                 if (isStopped) break;
                 String target = findModelForScript(seg[1], pri);
                 for (String ch : splitIntoFastChunks(seg[0])) {
                     if (isStopped) break;
-                    byte[] raw = synthDual(ch, target, esp, spd / pitch);
+                    byte[] raw = synthDual(ch, target, esp, spd);
                     if (raw != null && raw.length > 0) {
                         byte[] pcm = enhanceHdClarityAndLoudness(raw);
-                        wrote = true;
-                        for (int off = 0; off < pcm.length && !isStopped; ) {
-                            int len = Math.min(maxB, pcm.length - off);
-                            cb.audioAvailable(pcm, off, len);
-                            off += len;
+                        if (pcm.length > 0) {
+                            wrote = true;
+                            for (int off = 0; off < pcm.length && !isStopped; ) {
+                                int len = Math.min(maxB, pcm.length - off);
+                                cb.audioAvailable(pcm, off, len);
+                                off += len;
+                            }
                         }
                     }
                 }
@@ -227,6 +314,7 @@ public class TtsService extends TextToSpeechService {
             cb.done();
         }
     }
+
     @Override public void onDestroy() {
         isStopped = true;
         if (priEng != null) { priEng.destroyEngine(); priMod = ""; }
