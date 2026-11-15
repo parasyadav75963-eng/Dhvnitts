@@ -192,7 +192,7 @@ public class NotificationHelper {
     }
     public static void requestPermissionIfNeeded(Activity activity) {
         if (Build.VERSION.SDK_INT >= 33 && activity != null) {
-            if (activity.checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+            if (activity.checkSelfPermission("android.permission.POST_NOTIFICATIONS") != 0) {
                 activity.requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 101);
             }
         }
