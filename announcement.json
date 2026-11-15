@@ -1,9 +1,9 @@
 {
-  "id": "update_v171_live",
-  "title": "New Update Available (v1.7.1)!",
-  "short_msg": "A new faster Dhwani TTS update v1.7.1 is available! Double tap to view details and update now.",
-  "full_msg": "Greetings from Interested Technology for Blind!\n\nA new update of Dhwani TTS (v1.7.1) is now live with important fixes:\n1. Fixed the 0% stuck update download issue with fast auto-redirect support.\n2. Added fast Indian voices with anti-stutter phoneme tuning.\n3. Improved HD loudness and live 0% to 100% progress bar.\n\nTap 'Open Link / Download' below or use Check for Update to install the latest version!",
-  "link": "https://github.com/parasyadav75963-eng/Dhvnitts/releases/download/latest/DhwaniTTS.apk",
+  "id": "live_event_6pm_launch",
+  "title": "Live Today at 6:00 PM: Dhwani TTS Launch & Q&A!",
+  "short_msg": "Join our special YouTube Live today at 6:00 PM for the official Dhwani TTS launch, live testing, and Q&A! Double tap for details.",
+  "full_msg": "Warm greetings from Interested Technology for Blind!\n\nWe are super excited to invite you to a special Live Event today at 6:00 PM IST!\n\nWhat we will cover in today's live session:\n1. Official Launch & complete overview of Dhwani Text-to-Speech Engine.\n2. Detailed discussion on features, Indian voices, and real-time live testing.\n3. Live Q&A Session: Ask your questions, share suggestions, and interact directly with us!\n\nTap the 'Open Link' button below to visit our official YouTube channel right now. Please make sure to Subscribe and turn on the notification bell so you get notified as soon as we go live at 6:00 PM!\n\nSee you all in the live stream!",
+  "link": "https://youtube.com/@interestedtechnologyforblind?si=C6hDpgzThESxxhYQ",
   "latest_version": "1.7.1",
   "apk_url": "https://github.com/parasyadav75963-eng/Dhvnitts/releases/download/latest/DhwaniTTS.apk",
   "update_notes": "Version 1.7.1 fixes the 0% update download bug and includes fast Indian voices with HD clarity. Update now!"
