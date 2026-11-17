@@ -170,7 +170,7 @@ std::string detectCharLang(uint32_t cp, const std::string& defaultLang) {
     if (cp >= 0x0400 && cp <= 0x04FF) return "ru";
     if ((cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z')) {
         if (defaultLang.find("hi") == 0 || defaultLang.find("bn") == 0 || defaultLang.find("ta") == 0 || defaultLang.find("te") == 0 || defaultLang.find("kn") == 0 || defaultLang.find("ml") == 0 || defaultLang.find("gu") == 0 || defaultLang.find("mr") == 0) {
-            return "en-us";
+            return defaultLang;
         }
         return defaultLang;
     }
@@ -372,8 +372,8 @@ Java_com_itfb_dhwanitts_PiperEngine_nativeSynthesize(JNIEnv* env, jclass, jstrin
 
         auto mem = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
         int64_t inShape[] = {1, (int64_t)ids.size()}, lenData[] = {(int64_t)ids.size()}, lenShape[] = {1}, scShape[] = {3};
-        float effNoise = (ids.size() < 28) ? 0.30f : (modelNoiseScale > 0.50f ? 0.50f : modelNoiseScale);
-        float effNoiseW = (ids.size() < 28) ? 0.35f : (modelNoiseW > 0.60f ? 0.60f : modelNoiseW);
+        float effNoise = (engineSynthMode >= 2) ? 0.15f : 0.22f;
+        float effNoiseW = (engineSynthMode >= 2) ? 0.18f : 0.25f;
         float modeBoost = (engineSynthMode == 3) ? 1.42f : ((engineSynthMode == 2) ? 1.25f : ((engineSynthMode == 1) ? 1.15f : 1.0f));
         float effLen = modelLengthScale / ((speed > 0.1f ? speed : 1.0f) * modeBoost);
         if (ids.size() < 20 && effLen > 0.85f) effLen *= 0.90f;

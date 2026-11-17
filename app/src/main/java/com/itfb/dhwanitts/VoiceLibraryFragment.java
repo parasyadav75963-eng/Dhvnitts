@@ -56,6 +56,8 @@ public class VoiceLibraryFragment extends Fragment {
         recyclerView = view.findViewById(R.id.recycler_voices);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         adapter = new VoiceAdapter(voiceList);
+        recyclerView.setItemAnimator(null);
+        recyclerView.setItemAnimator(null);
         recyclerView.setAdapter(adapter);
 
         if (view instanceof ViewGroup) {
@@ -126,7 +128,7 @@ public class VoiceLibraryFragment extends Fragment {
         File voicesDir = new File(requireContext().getFilesDir(), "voices");
         voiceList.clear();
         for (VoiceModel vm : allVoicesMaster) {
-            if (!vm.getEngineMode().equals(selectedMode)) continue;
+            if (!selectedLang.startsWith("Installed Voices") && !vm.getEngineMode().equals(selectedMode)) continue;
             File checkModel = new File(voicesDir, vm.getKey() + ".onnx");
             File checkConfig = new File(voicesDir, vm.getKey() + ".onnx.json");
             vm.setDownloaded(checkModel.exists() && checkConfig.exists() && checkModel.length() > 1024);

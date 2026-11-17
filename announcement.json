@@ -1,6 +1,7 @@
 {
-  "id": 108,
-  "title": "Dhwani TTS v1.8.0 Mega Update Released!",
-  "message": "1. Studio Clarity Engine: Vocalizer/Eloquence-like ultra-crisp sound, zero stuttering & zero-lag silence trimmer.\n2. Smart Auto-Return: Automatically switches back to your chosen default voice after reading other languages.\n3. A-to-Z Language Dropdown added in Voice Library.\n4. Full Auto TTS & multilingual voice selector support.",
-  "url": "https://github.com/parasyadav75963-byte/SpeechPlusTTS/releases"
+  "id": "v1_6_ultimate_release",
+  "title": "DhwaniTTS v1.6 Ultimate Update",
+  "short_msg": "4 Engine Modes, Crystal-Clear Hindi Pronunciation, and Persistent Notification Inbox!",
+  "full_msg": "Welcome to the ultimate DhwaniTTS release by ITFB! This update includes:-\n1. Four Pro Engine Modes: Dhwani Natural, Sonic, Crisp, and Turbo.\n2. Zero-Stutter C++ Anti-Babble & Smart Pronunciation Lexicon for clear Button/App names.\n3. Monster Voice Bug completely fixed with intelligent sample-rate resampling.\n4. Permanent Notifications & Updates Inbox where all announcements stay saved until deleted.\n5. Back Button fix and TalkBack cursor stability.\n\nTap below to download and install the latest APK directly!",
+  "link": "https://github.com/parasyadav75963-eng/Dhvnitts/releases/download/latest/DhwaniTTS-latest.apk"
 }

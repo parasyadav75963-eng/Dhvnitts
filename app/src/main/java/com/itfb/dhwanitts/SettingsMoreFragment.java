@@ -41,6 +41,13 @@ public class SettingsMoreFragment extends Fragment {
             }
         });
 
+        if (view instanceof ViewGroup) {
+            Button btnNotif = new Button(requireContext());
+            int count = NotificationHelper.getInboxArray(requireContext()).length();
+            btnNotif.setText("Notifications & Updates Inbox (" + count + " Available)");
+            btnNotif.setOnClickListener(v -> NotificationHelper.openInboxDialog(requireContext(), null));
+            ((ViewGroup) view).addView(btnNotif, 0);
+        }
         return view;
     }
 }

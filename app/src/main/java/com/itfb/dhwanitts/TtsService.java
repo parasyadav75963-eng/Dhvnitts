@@ -84,6 +84,8 @@ public class TtsService extends TextToSpeechService {
     @Override public int onLoadVoice(String n) { return onIsValidVoiceName(n); }
 
     @Override public String onGetDefaultVoiceNameFor(String l, String c, String v) {
+        String sv = prefs != null ? prefs.getString("saved_voice_key", "") : "";
+        if (!sv.isEmpty() && !resolveModelPath(sv).isEmpty()) return sv;
         String iso = normalizeLangToIso2(l);
         for (File f : getInstalledModelFiles()) {
             String k = f.getName().replace(".onnx", "");
@@ -134,6 +136,11 @@ public class TtsService extends TextToSpeechService {
         if (TextUtils.isEmpty(langCode)) return defPath;
         String iso = normalizeLangToIso2(langCode);
         if (getCleanLocaleForFilename(new File(defPath).getName()).getLanguage().equalsIgnoreCase(iso)) return defPath;
+        String suf = defPath.contains("__turbo") ? "__turbo.onnx" : (defPath.contains("__crisp") ? "__crisp.onnx" : (defPath.contains("__sonic") ? "__sonic.onnx" : ".onnx"));
+        for (File f : getInstalledModelFiles()) {
+            String fn = f.getName();
+            if (getCleanLocaleForFilename(fn).getLanguage().equalsIgnoreCase(iso) && fn.endsWith(suf)) return f.getAbsolutePath();
+        }
         for (File f : getInstalledModelFiles()) {
             if (getCleanLocaleForFilename(f.getName()).getLanguage().equalsIgnoreCase(iso)) return f.getAbsolutePath();
         }
@@ -193,10 +200,21 @@ public class TtsService extends TextToSpeechService {
 
     private String cleanAndNormalizeText(String in, int numMode, int puncMode) {
         if (TextUtils.isEmpty(in)) return "";
-        String o = in.replaceAll("([a-z])([A-Z])", "$1 $2").replace("_", " ").replaceAll("\\s+", " ").trim();
+        String o = in.replaceAll("([a-z])([A-Z])", "$1 $2")
+                .replaceAll("([A-Z]+)([A-Z][a-z])", "$1 $2")
+                .replace("_", " ").replace("-", " ");
+        o = o.replaceAll("(?i)\\btts\\b", "T T S")
+                .replaceAll("(?i)\\bapk\\b", "A P K")
+                .replaceAll("(?i)\\bui\\b", "U I")
+                .replaceAll("(?i)\\bwifi\\b", "Wi-Fi")
+                .replaceAll("(?i)\\bbtn\\b", "button")
+                .replaceAll("(?i)\\bmb\\b", "megabytes")
+                .replaceAll("(?i)\\bgb\\b", "gigabytes")
+                .replaceAll("(?i)\\bkb\\b", "kilobytes")
+                .replaceAll("(?i)\\bitfb\\b", "I T F B");
         if (numMode == 1) o = o.replaceAll("(\\d)", " $1 ");
         if (puncMode == 0) o = o.replaceAll("[*#~^`|<>{}\\[\\]\\\\]", " ");
-        return o.trim();
+        return o.replaceAll("\\s+", " ").trim();
     }
     private byte[] synthDual(String chunk, String mod, String esp, float spd) {
         PiperEngine.applyModeForPath(mod);
@@ -217,6 +235,27 @@ public class TtsService extends TextToSpeechService {
         return null;
     }
 
+    private byte[] resampleAndEnhance(byte[] rawPcm, int inSr, int outSr, float pitch) {
+        byte[] clean = enhanceHdClarityAndLoudness(rawPcm);
+        if (clean == null || clean.length < 4) return clean;
+        double step = ((double) inSr / (double) outSr) * pitch;
+        if (Math.abs(step - 1.0) < 0.02) return clean;
+        int inSamples = clean.length / 2;
+        int outSamples = Math.max(1, (int) (inSamples / step));
+        byte[] out = new byte[outSamples * 2];
+        for (int i = 0; i < outSamples; i++) {
+            double srcIdx = i * step;
+            int idx0 = (int) srcIdx;
+            int idx1 = Math.min(idx0 + 1, inSamples - 1);
+            double frac = srcIdx - idx0;
+            short s0 = (short) (((clean[idx0 * 2 + 1]) << 8) | (clean[idx0 * 2] & 0xFF));
+            short s1 = (short) (((clean[idx1 * 2 + 1]) << 8) | (clean[idx1 * 2] & 0xFF));
+            int val = (int) (s0 + frac * (s1 - s0));
+            out[i * 2] = (byte) (val & 0xFF);
+            out[i * 2 + 1] = (byte) ((val >> 8) & 0xFF);
+        }
+        return out;
+    }
     private byte[] enhanceHdClarityAndLoudness(byte[] rawPcm) {
         if (rawPcm == null || rawPcm.length < 4) return rawPcm;
         int n = rawPcm.length / 2;
@@ -242,7 +281,7 @@ public class TtsService extends TextToSpeechService {
             if (Math.abs(crisp) > peak) peak = Math.abs(crisp);
         }
         int boost = prefs != null ? prefs.getInt("volume_boost", 100) : 100;
-        float gain = Math.max(0.8f, Math.min(3.2f, (27500.0f / peak) * (boost / 100.0f)));
+        float gain = Math.max(0.8f, Math.min(1.65f, (24000.0f / peak) * (boost / 100.0f)));
         byte[] out = new byte[len * 2];
         for (int i = 0; i < len; i++) {
             float v = proc[i] * gain;
@@ -269,8 +308,7 @@ public class TtsService extends TextToSpeechService {
             if (userDef.isEmpty()) userDef = getFallbackModel();
 
             String reqV = (Build.VERSION.SDK_INT >= 21 && req.getVoiceName() != null) ? req.getVoiceName() : "";
-            String pri = (!reqV.isEmpty() && !"default_dhwani".equals(reqV)) ? resolveModelPath(reqV) : "";
-            if (pri.isEmpty()) pri = userDef;
+            String pri = !userDef.isEmpty() ? userDef : ((!reqV.isEmpty() && !"default_dhwani".equals(reqV)) ? resolveModelPath(reqV) : "");
             if (pri.isEmpty() || !new File(pri).exists()) { cb.error(); return; }
 
             String esp = PiperEngine.setupEspeakData(this);
@@ -288,8 +326,7 @@ public class TtsService extends TextToSpeechService {
             int puncM = prefs != null ? prefs.getInt("punc_pos", 0) : 0;
             String norm = cleanAndNormalizeText(cs.toString(), numM, puncM);
 
-            int sr = VoiceLangHelper.readSampleRate(new File(pri + ".json"));
-            cb.start(sr, AudioFormat.ENCODING_PCM_16BIT, 1);
+            cb.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1);
             int maxB = cb.getMaxBufferSize() > 0 ? cb.getMaxBufferSize() : 4096;
             String baseIso = getCleanLocaleForFilename(new File(pri).getName()).getLanguage();
             boolean wrote = false;
@@ -301,7 +338,10 @@ public class TtsService extends TextToSpeechService {
                     if (isStopped) break;
                     byte[] raw = synthDual(ch, target, esp, spd);
                     if (raw != null && raw.length > 0) {
-                        byte[] pcm = enhanceHdClarityAndLoudness(raw);
+                        int modSr = VoiceLangHelper.readSampleRate(new File(target + ".json"));
+                        int pitchPref = prefs != null ? prefs.getInt("pitch_rate", 50) : 50;
+                        float pitchFactor = 0.5f + (pitchPref / 100.0f);
+                        byte[] pcm = resampleAndEnhance(raw, modSr, 22050, pitchFactor);
                         if (pcm.length > 0) {
                             wrote = true;
                             for (int off = 0; off < pcm.length && !isStopped; ) {

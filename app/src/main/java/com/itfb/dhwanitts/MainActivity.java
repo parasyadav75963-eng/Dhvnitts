@@ -14,7 +14,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         NotificationHelper.requestPermissionIfNeeded(this);
-        NotificationHelper.checkForRemoteUpdatesAndAnnouncements(this);
+        NotificationHelper.checkInBackground(this);
         handleNotificationIntent(getIntent());
 
         BottomNavigationView bottomNav = findViewById(R.id.bottom_navigation);
@@ -60,6 +60,15 @@ public class MainActivity extends AppCompatActivity {
                     title != null ? title : "Dhwani TTS Alert",
                     full != null ? full : "",
                     link != null ? link : "");
+        }
+    }
+    @Override
+    public void onBackPressed() {
+        BottomNavigationView nav = findViewById(R.id.bottom_navigation);
+        if (nav != null && nav.getSelectedItemId() != R.id.nav_home) {
+            nav.setSelectedItemId(R.id.nav_home);
+        } else {
+            super.onBackPressed();
         }
     }
 }

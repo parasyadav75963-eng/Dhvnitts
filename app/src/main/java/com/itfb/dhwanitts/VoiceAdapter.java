@@ -47,6 +47,8 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
 
         holder.tvVoiceName.setText(voice.getName() + " (" + voice.getQuality() + ")");
         holder.tvVoiceSize.setText(voice.getSizeInfo());
+        holder.itemView.setFocusable(true);
+        holder.itemView.setContentDescription(voice.getName() + ", " + voice.getSizeInfo());
 
         File voicesDir = new File(context.getFilesDir(), "voices");
         File modelFile = new File(voicesDir, voice.getKey() + ".onnx");
@@ -89,7 +91,13 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
 
         holder.btnDownload.setOnClickListener(v -> {
             activeProgress.put(voice.getKey(), 0);
-            notifyItemChanged(holder.getAdapterPosition());
+            holder.btnDownload.setEnabled(false);
+            holder.btnDownload.setText("Downloading 0%");
+            if (holder.progressBar != null) {
+                holder.progressBar.setVisibility(View.VISIBLE);
+                holder.progressBar.setProgress(0);
+            }
+            v.sendAccessibilityEvent(android.view.accessibility.AccessibilityEvent.TYPE_VIEW_FOCUSED);
             downloadVoiceFile(context, voice, holder);
         });
 
@@ -136,14 +144,16 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
                 mainHandler.post(() -> {
                     activeProgress.remove(voice.getKey());
                     Toast.makeText(context, "Download Complete 100%: " + voice.getName(), Toast.LENGTH_SHORT).show();
-                    notifyDataSetChanged();
+                    int pos = holder.getAdapterPosition();
+                    if (pos != RecyclerView.NO_POSITION) notifyItemChanged(pos); else notifyDataSetChanged();
                 });
             } catch (Exception e) {
                 e.printStackTrace();
                 mainHandler.post(() -> {
                     activeProgress.remove(voice.getKey());
                     Toast.makeText(context, "Download Failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    notifyDataSetChanged();
+                    int pos = holder.getAdapterPosition();
+                    if (pos != RecyclerView.NO_POSITION) notifyItemChanged(pos); else notifyDataSetChanged();
                 });
             }
         });
@@ -177,7 +187,7 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
             if (trackPercent && totalLen > 0) {
                 int pct = (int) ((downloaded * 100L) / totalLen);
                 if (pct > 100) pct = 100;
-                if (pct != lastPct && (pct - lastPct >= 2 || pct == 100)) {
+                if (pct != lastPct && (pct - lastPct >= 10 || pct == 100)) {
                     lastPct = pct;
                     final int finalPct = pct;
                     activeProgress.put(voiceKey, finalPct);
