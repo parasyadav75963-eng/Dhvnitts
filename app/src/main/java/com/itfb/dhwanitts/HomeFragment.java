@@ -106,7 +106,7 @@ public class HomeFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        refreshAllData();
+        if (allDownloadedVoices.isEmpty()) refreshAllData();
     }
 
     private void refreshAllData() {
@@ -138,7 +138,9 @@ public class HomeFragment extends Fragment {
         if (files != null) {
             for (File file : files) {
                 String fname = file.getName();
-                String key = fname.substring(0, fname.length() - 5);
+                String rawKey = fname.substring(0, fname.length() - 5);
+                String modeTag = rawKey.endsWith("__turbo") ? " [Turbo]" : (rawKey.endsWith("__crisp") ? " [Crisp]" : (rawKey.endsWith("__sonic") ? " [Sonic]" : " [Natural]"));
+                String key = rawKey.replace("__turbo", "").replace("__crisp", "").replace("__sonic", "");
                 String langName = "Language";
                 String voiceName = key;
                 String quality = "medium";
@@ -171,7 +173,7 @@ public class HomeFragment extends Fragment {
                 String mPath = file.getAbsolutePath();
                 String cPath = mPath + ".json";
                 if (new File(cPath).exists()) {
-                    allDownloadedVoices.add(new VoiceModel(key, langName, "", voiceName + " (" + quality + ")", quality, mPath, cPath, "", true));
+                    allDownloadedVoices.add(new VoiceModel(rawKey, langName, "", voiceName + modeTag + " (" + quality + ")", quality, mPath, cPath, "", true));
                     if (!downloadedLanguages.contains(langName)) downloadedLanguages.add(langName);
                 }
             }
@@ -275,7 +277,8 @@ public class HomeFragment extends Fragment {
         final VoiceModel testVm = currentVoicesForLang.get(vPos);
         final float speed = Math.max(0.25f, seekbarSpeechRate.getProgress() / 50.0f);
         final float pitchFactor = 0.5f + (seekbarPitch.getProgress() / 100.0f);
-        final int playRate = Math.max(8000, Math.min(48000, (int) (22050 * pitchFactor)));
+        final int baseSr = VoiceLangHelper.readSampleRate(new File(testVm.getConfigPath()));
+        final int playRate = Math.max(8000, Math.min(48000, (int) (baseSr * pitchFactor)));
         final Context appCtx = requireContext().getApplicationContext();
 
         Toast.makeText(getContext(), "Playing Preview...", Toast.LENGTH_SHORT).show();
@@ -284,8 +287,10 @@ public class HomeFragment extends Fragment {
                 try {
                     PiperEngine engine = new PiperEngine();
                     String espeak = PiperEngine.setupEspeakData(appCtx);
+                    VoiceLangHelper.tuneConfigForZeroStutter(new File(testVm.getConfigPath()), testVm.getKey().replace("__turbo","").replace("__crisp","").replace("__sonic",""));
+                    PiperEngine.applyModeForPath(testVm.getModelPath());
                     if (engine.initEngine(testVm.getModelPath(), testVm.getConfigPath(), espeak)) {
-                        byte[] pcm = engine.synthesizeText("Welcome to Dhwani Text to Speech. Navigate up button, double tap to activate.", speed / pitchFactor);
+                        byte[] pcm = engine.synthesizeText(VoiceLangHelper.getSampleTextForVoice(testVm.getKey().replace("__turbo","").replace("__crisp","").replace("__sonic","")), speed / pitchFactor);
                         if (pcm != null && pcm.length > 0) PiperAudioPlayer.playAudio(pcm, playRate);
                     }
                 } catch (Exception ignored) {}

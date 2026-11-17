@@ -199,7 +199,7 @@ public class TtsService extends TextToSpeechService {
         return o.trim();
     }
     private byte[] synthDual(String chunk, String mod, String esp, float spd) {
-        VoiceLangHelper.tuneConfigForZeroStutter(new File(mod + ".json"), new File(mod).getName().replace(".onnx", ""));
+        PiperEngine.applyModeForPath(mod);
         if (mod.equals(priMod)) return priEng.synthesizeText(chunk, spd);
         if (mod.equals(secMod)) return secEng.synthesizeText(chunk, spd);
         if (priMod.isEmpty()) {
@@ -208,6 +208,7 @@ public class TtsService extends TextToSpeechService {
                 return priEng.synthesizeText(chunk, spd);
             }
         } else {
+            VoiceLangHelper.tuneConfigForZeroStutter(new File(mod + ".json"), new File(mod).getName().replace(".onnx", "").replace("__turbo","").replace("__crisp","").replace("__sonic",""));
             if (secEng.initEngine(mod, mod + ".json", esp)) {
                 secMod = mod;
                 return secEng.synthesizeText(chunk, spd);
@@ -258,7 +259,8 @@ public class TtsService extends TextToSpeechService {
         NotificationHelper.checkInBackground(this);
         CharSequence cs = req.getCharSequenceText();
         if (TextUtils.isEmpty(cs)) {
-            cb.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1);
+            int sr = VoiceLangHelper.readSampleRate(new File(pri + ".json"));
+            cb.start(sr, AudioFormat.ENCODING_PCM_16BIT, 1);
             cb.done();
             return;
         }
@@ -277,16 +279,18 @@ public class TtsService extends TextToSpeechService {
                 VoiceLangHelper.tuneConfigForZeroStutter(new File(userDef + ".json"), new File(userDef).getName().replace(".onnx", ""));
                 if (priEng.initEngine(userDef, userDef + ".json", esp)) priMod = userDef;
             }
-            int rate = prefs != null ? prefs.getInt("speech_rate", 100) : 100;
+            int rate = prefs != null ? prefs.getInt("speech_rate", 50) : 50;
             int sysRate = req.getSpeechRate();
-            float comb = (rate / 100f) * (sysRate > 0 ? (sysRate / 100f) : 1f);
-            float spd = Math.max(0.45f, Math.min(2.2f, 1.0f / Math.max(0.35f, comb)));
+            boolean forceSpd = prefs != null && prefs.getBoolean("force_speech", false);
+            float comb = (rate / 50f) * ((!forceSpd && sysRate > 0) ? (sysRate / 100f) : 1f);
+            float spd = Math.max(0.45f, Math.min(2.2f, Math.max(0.35f, comb)));
 
-            int numM = prefs != null ? prefs.getInt("number_mode", 0) : 0;
-            int puncM = prefs != null ? prefs.getInt("punctuation_mode", 0) : 0;
+            int numM = prefs != null ? prefs.getInt("num_pos", 0) : 0;
+            int puncM = prefs != null ? prefs.getInt("punc_pos", 0) : 0;
             String norm = cleanAndNormalizeText(cs.toString(), numM, puncM);
 
-            cb.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1);
+            int sr = VoiceLangHelper.readSampleRate(new File(pri + ".json"));
+            cb.start(sr, AudioFormat.ENCODING_PCM_16BIT, 1);
             int maxB = cb.getMaxBufferSize() > 0 ? cb.getMaxBufferSize() : 4096;
             String baseIso = getCleanLocaleForFilename(new File(pri).getName()).getLanguage();
             boolean wrote = false;

@@ -10,10 +10,15 @@ public class VoiceModel {
     private String configPath;
     private String sizeMB;
     private boolean isDownloaded;
+    private String engineMode;
 
     private static final String PIPER_BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/main/";
 
     public VoiceModel(String key, String languageName, String country, String voiceName, String quality, String modelPath, String configPath, String sizeMB, boolean isDownloaded) {
+        this(key, languageName, country, voiceName, quality, modelPath, configPath, sizeMB, isDownloaded, "Dhwani Natural");
+    }
+
+    public VoiceModel(String key, String languageName, String country, String voiceName, String quality, String modelPath, String configPath, String sizeMB, boolean isDownloaded, String engineMode) {
         this.key = key;
         this.languageName = languageName;
         this.country = country;
@@ -23,6 +28,7 @@ public class VoiceModel {
         this.configPath = configPath;
         this.sizeMB = sizeMB;
         this.isDownloaded = isDownloaded;
+        this.engineMode = (engineMode == null || engineMode.isEmpty()) ? "Dhwani Natural" : engineMode;
     }
 
     public String getKey() { return key; }
@@ -33,6 +39,7 @@ public class VoiceModel {
     public String getQuality() { return quality; }
     public String getModelPath() { return modelPath; }
     public String getConfigPath() { return configPath; }
+    public String getEngineMode() { return engineMode; }
     public String getModelUrl() {
         return (modelPath != null && modelPath.startsWith("http")) ? modelPath : PIPER_BASE + modelPath;
     }
@@ -40,7 +47,7 @@ public class VoiceModel {
         return (configPath != null && configPath.startsWith("http")) ? configPath : PIPER_BASE + configPath;
     }
     public String getSizeMB() { return sizeMB; }
-    public String getSizeInfo() { return "Size: " + sizeMB + " | Country: " + country; }
+    public String getSizeInfo() { return "Mode: " + engineMode + " | Size: " + sizeMB + (country.isEmpty() ? "" : " | Country: " + country); }
     public boolean isDownloaded() { return isDownloaded; }
     public void setDownloaded(boolean downloaded) { isDownloaded = downloaded; }
 }

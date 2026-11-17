@@ -10,6 +10,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 public class PiperEngine {
+    private String myModelPath = null;
+    private String myConfigPath = null;
+    private String myDataPath = null;
     private static final String TAG = "PiperEngine";
     private static boolean isLibraryLoaded = false;
     private Context appContext;
@@ -79,7 +82,10 @@ public class PiperEngine {
     // Support both static and instance calls used across TtsService, PiperAudioPlayer, and MainActivity
     public static boolean init(Context context, String mPath, String cPath) {
         if (!isLibraryLoaded) return false;
-        return nativeInit(mPath, cPath, setupEspeakData(context));
+        synchronized (PiperEngine.class) {
+            
+            return nativeInit(mPath, cPath, setupEspeakData(context));
+        }
     }
 
     public boolean initEngine(String mPath, String cPath) {
@@ -95,17 +101,30 @@ public class PiperEngine {
 
     public boolean initEngine(String mPath, String cPath, String dPath) {
         if (!isLibraryLoaded) return false;
-        return nativeInit(mPath, cPath, dPath);
+        synchronized (PiperEngine.class) {
+            this.myModelPath = mPath; this.myConfigPath = cPath; this.myDataPath = dPath;
+            applyModeForPath(mPath);
+            return nativeInit(mPath, cPath, dPath);
+        }
     }
 
     public static byte[] synthesize(String text, float speed) {
         if (!isLibraryLoaded || text == null || text.trim().isEmpty()) return new byte[0];
-        return nativeSynthesize(text, speed);
+        synchronized (PiperEngine.class) {
+            
+            return nativeSynthesize(text, speed);
+        }
     }
 
     public byte[] synthesizeText(String text, float speed) {
         if (!isLibraryLoaded || text == null || text.trim().isEmpty()) return new byte[0];
-        return nativeSynthesize(text, speed);
+        synchronized (PiperEngine.class) {
+            if (this.myModelPath != null && this.myConfigPath != null && this.myDataPath != null) {
+                applyModeForPath(this.myModelPath);
+                nativeInit(this.myModelPath, this.myConfigPath, this.myDataPath);
+            }
+            return nativeSynthesize(text, speed);
+        }
     }
 
     public byte[] synthesizeText(String text) {
@@ -123,4 +142,18 @@ public class PiperEngine {
     public static native boolean nativeInit(String mPath, String cPath, String dPath);
     public static native byte[] nativeSynthesize(String text, float speed);
     public static native void nativeDestroy();
+
+    public static int detectModeFromPath(String path) {
+        if (path == null) return 0;
+        if (path.contains("__turbo")) return 3;
+        if (path.contains("__crisp")) return 2;
+        if (path.contains("__sonic")) return 1;
+        return 0;
+    }
+
+    public static void applyModeForPath(String path) {
+        try { nativeSetSynthMode(detectModeFromPath(path)); } catch (Throwable ignored) {}
+    }
+
+    private static native void nativeSetSynthMode(int mode);
 }

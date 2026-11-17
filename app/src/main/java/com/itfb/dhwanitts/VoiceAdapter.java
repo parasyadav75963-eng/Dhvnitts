@@ -79,8 +79,8 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
         holder.btnPreview.setOnClickListener(v -> {
             if (modelFile.exists() && modelFile.length() > 1024 && configFile.exists()) {
                 Toast.makeText(context, "Playing preview...", Toast.LENGTH_SHORT).show();
-                String previewText = VoiceLangHelper.getSampleTextForVoice(voice.getKey());
-                VoiceLangHelper.tuneConfigForZeroStutter(configFile, voice.getKey());
+                String previewText = VoiceLangHelper.getSampleTextForVoice(voice.getKey().replace("__turbo","").replace("__crisp","").replace("__sonic",""));
+                VoiceLangHelper.tuneConfigForZeroStutter(configFile, voice.getKey().replace("__turbo","").replace("__crisp","").replace("__sonic",""));
                 playRealPreview(modelFile.getAbsolutePath(), configFile.getAbsolutePath(), previewText, context);
             } else {
                 Toast.makeText(context, "Please download this voice first to preview!", Toast.LENGTH_SHORT).show();
@@ -104,6 +104,7 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
         executorService.execute(() -> {
             try {
                 PiperEngine engine = new PiperEngine();
+                PiperEngine.applyModeForPath(modelPath);
                 if (engine.initEngine(modelPath, configPath, PiperEngine.setupEspeakData(context))) {
                     byte[] audioData = engine.synthesizeText(text, 1.0f);
                     if (audioData != null && audioData.length > 0) {
@@ -129,7 +130,7 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
                 File configFile = new File(voicesDir, voice.getKey() + ".onnx.json");
 
                 downloadSingleWithProgress(voice.getConfigUrl(), configFile, voice.getKey(), holder, false);
-                VoiceLangHelper.tuneConfigForZeroStutter(configFile, voice.getKey());
+                VoiceLangHelper.tuneConfigForZeroStutter(configFile, voice.getKey().replace("__turbo","").replace("__crisp","").replace("__sonic",""));
                 downloadSingleWithProgress(voice.getModelUrl(), modelFile, voice.getKey(), holder, true);
 
                 mainHandler.post(() -> {

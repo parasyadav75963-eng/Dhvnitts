@@ -194,8 +194,7 @@ public class SettingsActivity extends AppCompatActivity {
                 out.close();
                 in.close();
 
-                ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE)
-                        .edit().putString("installed_commit_sha", targetSha).apply();
+                pendingCommitSha = targetSha;
 
                 mainHandler.post(() -> {
                     progressDialog.dismiss();
@@ -211,6 +210,21 @@ public class SettingsActivity extends AppCompatActivity {
         }).start();
     }
 
+    private static File pendingApkFile = null;
+    private static String pendingCommitSha = null;
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (pendingApkFile != null && pendingApkFile.exists()) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || getPackageManager().canRequestPackageInstalls()) {
+                File f = pendingApkFile;
+                pendingApkFile = null;
+                installApkFile(this, f);
+            }
+        }
+    }
+
     private static void installApkFile(Context ctx, File apkFile) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -219,6 +233,7 @@ public class SettingsActivity extends AppCompatActivity {
                     Intent permIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                             Uri.parse("package:" + ctx.getPackageName()));
                     permIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    pendingApkFile = apkFile;
                     ctx.startActivity(permIntent);
                     return;
                 }
@@ -227,6 +242,11 @@ public class SettingsActivity extends AppCompatActivity {
             Intent install = new Intent(Intent.ACTION_VIEW);
             install.setDataAndType(apkUri, "application/vnd.android.package-archive");
             install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (pendingCommitSha != null && !pendingCommitSha.isEmpty()) {
+                ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE)
+                        .edit().putString("installed_commit_sha", pendingCommitSha).apply();
+                pendingCommitSha = null;
+            }
             ctx.startActivity(install);
         } catch (Exception e) {
             Toast.makeText(ctx, "Installer error: " + e.getMessage(), Toast.LENGTH_LONG).show();

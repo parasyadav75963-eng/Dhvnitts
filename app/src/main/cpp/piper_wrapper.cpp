@@ -20,6 +20,16 @@ extern "C" const char* espeak_TextToPhonemesWithTerminator(const void** textptr,
 #define CLAUSE_SEMICOLON 0x00000020
 #define CLAUSE_TYPE_MASK 0x00000038
 
+struct VoiceInstance {
+    Ort::Session* session = nullptr;
+    std::string modelPath = "";
+    std::string voiceLang = "en-us";
+    float noiseScale = 0.667f, lengthScale = 1.0f, noiseW = 0.8f;
+    std::map<std::string, std::vector<int64_t>> phonemeMap;
+};
+static std::map<std::string, VoiceInstance*> voiceCache;
+
+static int engineSynthMode = 0; // 0=Natural, 1=Sonic, 2=Crisp, 3=Turbo
 Ort::Env* ortEnv = nullptr;
 Ort::Session* ortSession = nullptr;
 std::string currentModelPath = "";
@@ -294,7 +304,16 @@ Java_com_itfb_dhwanitts_PiperEngine_nativeInit(JNIEnv* env, jclass, jstring mPat
         if (espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, root.c_str(), 0) > 0) isEspeakInitialized = true;
     }
 
-    if (ortSession && currentModelPath == m) {
+    std::string reqModel(m);
+    if (voiceCache.count(reqModel) && voiceCache[reqModel]->session != nullptr) {
+        VoiceInstance* vi = voiceCache[reqModel];
+        ortSession = vi->session;
+        currentModelPath = vi->modelPath;
+        currentVoiceLang = vi->voiceLang;
+        modelNoiseScale = vi->noiseScale;
+        modelLengthScale = vi->lengthScale;
+        modelNoiseW = vi->noiseW;
+        phonemeIdMap = vi->phonemeMap;
         if (isEspeakInitialized) espeak_SetVoiceByName(currentVoiceLang.c_str());
         env->ReleaseStringUTFChars(mPath, m); env->ReleaseStringUTFChars(cPath, c); env->ReleaseStringUTFChars(dPath, d);
         return JNI_TRUE;
@@ -302,12 +321,21 @@ Java_com_itfb_dhwanitts_PiperEngine_nativeInit(JNIEnv* env, jclass, jstring mPat
 
     try {
         if (!ortEnv) ortEnv = new Ort::Env(ORT_LOGGING_LEVEL_WARNING, "DhwaniTTS");
-        delete ortSession; ortSession = nullptr;
         Ort::SessionOptions opts; opts.SetIntraOpNumThreads(4);
         opts.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-        ortSession = new Ort::Session(*ortEnv, m, opts);
-        currentModelPath = m;
+        Ort::Session* newSession = new Ort::Session(*ortEnv, m, opts);
+        ortSession = newSession;
+        currentModelPath = reqModel;
         parseModelConfig(c);
+        VoiceInstance* vi = new VoiceInstance();
+        vi->session = newSession;
+        vi->modelPath = currentModelPath;
+        vi->voiceLang = currentVoiceLang;
+        vi->noiseScale = modelNoiseScale;
+        vi->lengthScale = modelLengthScale;
+        vi->noiseW = modelNoiseW;
+        vi->phonemeMap = phonemeIdMap;
+        voiceCache[reqModel] = vi;
         if (isEspeakInitialized) espeak_SetVoiceByName(currentVoiceLang.c_str());
     } catch (...) {
         env->ReleaseStringUTFChars(mPath, m); env->ReleaseStringUTFChars(cPath, c); env->ReleaseStringUTFChars(dPath, d);
@@ -344,7 +372,12 @@ Java_com_itfb_dhwanitts_PiperEngine_nativeSynthesize(JNIEnv* env, jclass, jstrin
 
         auto mem = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
         int64_t inShape[] = {1, (int64_t)ids.size()}, lenData[] = {(int64_t)ids.size()}, lenShape[] = {1}, scShape[] = {3};
-        float scData[] = {modelNoiseScale, modelLengthScale / (speed > 0.1f ? speed : 1.0f), modelNoiseW};
+        float effNoise = (ids.size() < 28) ? 0.30f : (modelNoiseScale > 0.50f ? 0.50f : modelNoiseScale);
+        float effNoiseW = (ids.size() < 28) ? 0.35f : (modelNoiseW > 0.60f ? 0.60f : modelNoiseW);
+        float modeBoost = (engineSynthMode == 3) ? 1.42f : ((engineSynthMode == 2) ? 1.25f : ((engineSynthMode == 1) ? 1.15f : 1.0f));
+        float effLen = modelLengthScale / ((speed > 0.1f ? speed : 1.0f) * modeBoost);
+        if (ids.size() < 20 && effLen > 0.85f) effLen *= 0.90f;
+        float scData[] = {effNoise, effLen, effNoiseW};
         std::vector<const char*> inNames = {"input", "input_lengths", "scales"};
         std::vector<Ort::Value> inTensors;
         inTensors.push_back(Ort::Value::CreateTensor<int64_t>(mem, ids.data(), ids.size(), inShape, 2));
@@ -362,8 +395,24 @@ Java_com_itfb_dhwanitts_PiperEngine_nativeSynthesize(JNIEnv* env, jclass, jstrin
         jbyteArray res = env->NewByteArray(cnt * 2);
         jbyte* buf = env->GetByteArrayElements(res, nullptr);
         int16_t* pcm = reinterpret_cast<int16_t*>(buf);
+        size_t validCnt = cnt;
+        while (validCnt > 220 && (fa[validCnt - 1] < 0.008f && fa[validCnt - 1] > -0.008f)) {
+            validCnt--;
+        }
+        if (validCnt + 160 < cnt) validCnt += 160;
         for (size_t i = 0; i < cnt; i++) {
-            float v = fa[i] > 1.0f ? 1.0f : (fa[i] < -1.0f ? -1.0f : fa[i]);
+            float v = (i < validCnt) ? fa[i] : 0.0f;
+            if (engineSynthMode == 1 && i > 0 && i < validCnt) {
+                v = v + 0.25f * (v - fa[i - 1]);
+            } else if (engineSynthMode == 2 && i > 0 && i < validCnt) {
+                float d = v - fa[i - 1];
+                v = (v * 0.82f) + (d * 0.65f);
+            } else if (engineSynthMode == 3 && i > 0 && i < validCnt) {
+                float d = v - fa[i - 1];
+                v = (v * 0.68f) + (d * 0.95f);
+                v = (v > 0.0f) ? (v / (1.0f + 0.75f * v)) : (v / (1.0f - 0.75f * v));
+            }
+            v = v > 1.0f ? 1.0f : (v < -1.0f ? -1.0f : v);
             pcm[i] = (int16_t)(v * 32767.0f);
         }
         env->ReleaseByteArrayElements(res, buf, 0);
@@ -373,3 +422,8 @@ Java_com_itfb_dhwanitts_PiperEngine_nativeSynthesize(JNIEnv* env, jclass, jstrin
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_itfb_dhwanitts_PiperEngine_nativeDestroy(JNIEnv*, jclass) {}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_itfb_dhwanitts_PiperEngine_nativeSetSynthMode(JNIEnv*, jclass, jint mode) {
+    if (mode >= 0 && mode <= 3) engineSynthMode = (int)mode;
+}

@@ -25,7 +25,6 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -35,14 +34,21 @@ import java.util.concurrent.Executors;
 
 public class VoiceLibraryFragment extends Fragment {
     private RecyclerView recyclerView;
-    private Spinner langSpinner;
+    private Spinner modeSpinner, langSpinner;
     private VoiceAdapter adapter;
     private final List<VoiceModel> voiceList = new ArrayList<>();
     private final List<VoiceModel> allVoicesMaster = new ArrayList<>();
+    private final List<String> modeOptions = new ArrayList<>();
     private final List<String> langOptions = new ArrayList<>();
-    private ArrayAdapter<String> spinnerAdapter;
+    private ArrayAdapter<String> modeAdapter, langAdapter;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+
+    public static final String MODE_NATURAL = "Dhwani Natural (Neural HD)";
+    public static final String MODE_SONIC = "Dhwani Sonic (Ultra-Lite Fast)";
+    public static final String MODE_CRISP = "Dhwani Crisp (Classic Reflex)";
+    public static final String MODE_TURBO = "Dhwani Turbo (Formant Robotic)";
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
@@ -58,29 +64,49 @@ public class VoiceLibraryFragment extends Fragment {
             filterBox.setOrientation(LinearLayout.VERTICAL);
             filterBox.setPadding(32, 24, 32, 16);
 
-            TextView lbl = new TextView(requireContext());
-            lbl.setText("Select Language (A to Z):");
-            lbl.setTextSize(16f);
-            lbl.setTextColor(0xFFFFFFFF);
-            filterBox.addView(lbl);
+            TextView modeLbl = new TextView(requireContext());
+            modeLbl.setText("Select TTS Engine Mode:");
+            modeLbl.setTextSize(15f);
+            modeLbl.setTextColor(0xFF00E676);
+            filterBox.addView(modeLbl);
+
+            modeSpinner = new Spinner(requireContext());
+            modeSpinner.setContentDescription("Select TTS Engine Mode Dropdown");
+            modeOptions.clear();
+            modeOptions.add(MODE_NATURAL);
+            modeOptions.add(MODE_SONIC);
+            modeOptions.add(MODE_CRISP);
+            modeOptions.add(MODE_TURBO);
+            modeAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, modeOptions);
+            modeSpinner.setAdapter(modeAdapter);
+            filterBox.addView(modeSpinner);
+
+            TextView langLbl = new TextView(requireContext());
+            langLbl.setText("Select Language (A to Z):");
+            langLbl.setTextSize(15f);
+            langLbl.setTextColor(0xFF00E676);
+            langLbl.setPadding(0, 16, 0, 0);
+            filterBox.addView(langLbl);
 
             langSpinner = new Spinner(requireContext());
             langSpinner.setContentDescription("Select Language A to Z Dropdown");
             langOptions.clear();
             langOptions.add("Loading languages...");
-            spinnerAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, langOptions);
-            langSpinner.setAdapter(spinnerAdapter);
-            langSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            langAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, langOptions);
+            langSpinner.setAdapter(langAdapter);
+            filterBox.addView(langSpinner);
+
+            AdapterView.OnItemSelectedListener filterListener = new AdapterView.OnItemSelectedListener() {
                 @Override
                 public void onItemSelected(AdapterView<?> parent, View v, int position, long id) {
-                    if (position >= 0 && position < langOptions.size()) {
-                        filterVoicesByLanguage(langOptions.get(position));
-                    }
+                    applyModeAndLanguageFilter();
                 }
                 @Override
                 public void onNothingSelected(AdapterView<?> parent) {}
-            });
-            filterBox.addView(langSpinner);
+            };
+            modeSpinner.setOnItemSelectedListener(filterListener);
+            langSpinner.setOnItemSelectedListener(filterListener);
+
             root.addView(filterBox, 0);
         }
 
@@ -88,10 +114,23 @@ public class VoiceLibraryFragment extends Fragment {
         return view;
     }
 
-    private void filterVoicesByLanguage(String selectedLang) {
+    private void applyModeAndLanguageFilter() {
         if (allVoicesMaster.isEmpty()) return;
+        int mPos = modeSpinner != null ? modeSpinner.getSelectedItemPosition() : 0;
+        int lPos = langSpinner != null ? langSpinner.getSelectedItemPosition() : 0;
+        if (mPos < 0 || mPos >= modeOptions.size() || lPos < 0 || lPos >= langOptions.size()) return;
+
+        String selectedMode = modeOptions.get(mPos);
+        String selectedLang = langOptions.get(lPos);
+
+        File voicesDir = new File(requireContext().getFilesDir(), "voices");
         voiceList.clear();
         for (VoiceModel vm : allVoicesMaster) {
+            if (!vm.getEngineMode().equals(selectedMode)) continue;
+            File checkModel = new File(voicesDir, vm.getKey() + ".onnx");
+            File checkConfig = new File(voicesDir, vm.getKey() + ".onnx.json");
+            vm.setDownloaded(checkModel.exists() && checkConfig.exists() && checkModel.length() > 1024);
+
             if (selectedLang.startsWith("Installed Voices")) {
                 if (vm.isDownloaded()) voiceList.add(vm);
             } else if (vm.getLanguageName().equalsIgnoreCase(selectedLang)) {
@@ -100,6 +139,7 @@ public class VoiceLibraryFragment extends Fragment {
         }
         adapter.notifyDataSetChanged();
     }
+
     private void fetchOfficialVoices() {
         executorService.execute(() -> {
             try {
@@ -143,6 +183,7 @@ public class VoiceLibraryFragment extends Fragment {
             });
         }
     }
+
     private void parseVoicesJson(String jsonStr) {
         try {
             JSONObject root = new JSONObject(jsonStr);
@@ -178,11 +219,32 @@ public class VoiceLibraryFragment extends Fragment {
 
                 if (modelPath.isEmpty() || configPath.isEmpty()) continue;
                 String sizeMB = String.format("%.1f MB", totalSizeBytes / (1024.0 * 1024.0));
-                File checkModel = new File(voicesDir, key + ".onnx");
-                File checkConfig = new File(voicesDir, key + ".onnx.json");
-                boolean isDownloaded = checkModel.exists() && checkConfig.exists() && checkModel.length() > 50000;
 
-                fetchedVoices.add(new VoiceModel(key, langEnglish, country, voiceName, quality, modelPath, configPath, sizeMB, isDownloaded));
+                // 1. Dhwani Natural
+                File mNat = new File(voicesDir, key + ".onnx");
+                File cNat = new File(voicesDir, key + ".onnx.json");
+                fetchedVoices.add(new VoiceModel(key, langEnglish, country, voiceName, quality, modelPath, configPath, sizeMB, mNat.exists() && cNat.exists(), MODE_NATURAL));
+
+                // 2. Dhwani Sonic (Ultra-Lite Fast)
+                if (quality.equalsIgnoreCase("x_low") || quality.equalsIgnoreCase("low") || quality.equalsIgnoreCase("medium")) {
+                    String sKey = key + "__sonic";
+                    File mSon = new File(voicesDir, sKey + ".onnx");
+                    File cSon = new File(voicesDir, sKey + ".onnx.json");
+                    fetchedVoices.add(new VoiceModel(sKey, langEnglish, country, voiceName + " [Sonic]", "sonic-fast", modelPath, configPath, sizeMB, mSon.exists() && cSon.exists(), MODE_SONIC));
+                }
+
+                // 3. Dhwani Crisp (Classic Reflex)
+                String cKey = key + "__crisp";
+                File mCri = new File(voicesDir, cKey + ".onnx");
+                File cCri = new File(voicesDir, cKey + ".onnx.json");
+                fetchedVoices.add(new VoiceModel(cKey, langEnglish, country, voiceName + " [Crisp]", "crisp-reflex", modelPath, configPath, sizeMB, mCri.exists() && cCri.exists(), MODE_CRISP));
+
+                // 4. Dhwani Turbo (Formant Robotic)
+                String tKey = key + "__turbo";
+                File mTur = new File(voicesDir, tKey + ".onnx");
+                File cTur = new File(voicesDir, tKey + ".onnx.json");
+                fetchedVoices.add(new VoiceModel(tKey, langEnglish, country, voiceName + " [Turbo]", "turbo-robotic", modelPath, configPath, sizeMB, mTur.exists() && cTur.exists(), MODE_TURBO));
+
                 uniqueLangs.add(langEnglish);
             }
 
@@ -194,12 +256,13 @@ public class VoiceLibraryFragment extends Fragment {
                 langOptions.clear();
                 langOptions.add("Installed Voices (Downloaded)");
                 langOptions.addAll(uniqueLangs);
-                spinnerAdapter.notifyDataSetChanged();
+                langAdapter.notifyDataSetChanged();
 
-                int defaultIdx = langOptions.indexOf("English");
+                int defaultIdx = langOptions.indexOf("Hindi");
+                if (defaultIdx < 0) defaultIdx = langOptions.indexOf("English");
                 if (defaultIdx < 0) defaultIdx = 0;
                 langSpinner.setSelection(defaultIdx);
-                filterVoicesByLanguage(langOptions.get(defaultIdx));
+                applyModeAndLanguageFilter();
             });
         } catch (Exception e) {
             e.printStackTrace();
