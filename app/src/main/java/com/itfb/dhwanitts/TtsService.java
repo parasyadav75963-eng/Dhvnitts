@@ -259,8 +259,7 @@ public class TtsService extends TextToSpeechService {
         NotificationHelper.checkInBackground(this);
         CharSequence cs = req.getCharSequenceText();
         if (TextUtils.isEmpty(cs)) {
-            int sr = VoiceLangHelper.readSampleRate(new File(pri + ".json"));
-            cb.start(sr, AudioFormat.ENCODING_PCM_16BIT, 1);
+            cb.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1);
             cb.done();
             return;
         }
