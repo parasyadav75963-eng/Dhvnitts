@@ -313,4 +313,73 @@ public class HomeFragment extends Fragment {
         saveSettings();
         Toast.makeText(getContext(), "Reset to Default!", Toast.LENGTH_SHORT).show();
     }
+
+    private void attachTtsDrawerButton(View rootView) {
+        android.widget.LinearLayout container = null;
+        if (rootView instanceof android.widget.LinearLayout) {
+            container = (android.widget.LinearLayout) rootView;
+        } else if (rootView instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) rootView;
+            if (vg.getChildCount() > 0 && vg.getChildAt(0) instanceof android.widget.LinearLayout) {
+                container = (android.widget.LinearLayout) vg.getChildAt(0);
+            }
+        }
+        if (container == null || container.findViewWithTag("tts_drawer_btn") != null) return;
+        android.widget.LinearLayout bar = new android.widget.LinearLayout(requireContext());
+        bar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        bar.setGravity(android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL);
+        android.widget.Button btn = new android.widget.Button(requireContext());
+        btn.setTag("tts_drawer_btn");
+        btn.setText("☰ TTS Menu");
+        btn.setContentDescription("Open TTS Navigation Drawer");
+        btn.setOnClickListener(v -> openTtsDrawerMenu());
+        bar.addView(btn);
+        container.addView(bar, 0);
+    }
+
+    private void openTtsDrawerMenu() {
+        String[] items = {"Active Mix Languages (Real-Time Toggles)"};
+        new android.app.AlertDialog.Builder(requireContext())
+                .setTitle("TTS Navigation Menu")
+                .setItems(items, (d, which) -> {
+                    if (which == 0) showMixLanguageTogglesDialog();
+                })
+                .setNegativeButton("Close", null)
+                .show();
+    }
+
+    private void showMixLanguageTogglesDialog() {
+        java.util.LinkedHashMap<String, String> langMap = new java.util.LinkedHashMap<>();
+        for (VoiceModel vm : allDownloadedVoices) {
+            String k = vm.getKey().toLowerCase();
+            String iso = k.length() >= 2 ? k.substring(0, 2) : "en";
+            if (!langMap.containsKey(iso)) langMap.put(iso, vm.getLanguageName());
+        }
+        if (langMap.isEmpty()) {
+            Toast.makeText(getContext(), "No downloaded voices found!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        android.widget.ScrollView sv = new android.widget.ScrollView(requireContext());
+        android.widget.LinearLayout list = new android.widget.LinearLayout(requireContext());
+        list.setOrientation(android.widget.LinearLayout.VERTICAL);
+        list.setPadding(48, 24, 48, 24);
+        for (java.util.Map.Entry<String, String> e : langMap.entrySet()) {
+            final String iso = e.getKey();
+            final String name = e.getValue();
+            Switch sw = new Switch(requireContext());
+            sw.setText(name + " (" + iso.toUpperCase() + ")");
+            sw.setTextSize(16f);
+            sw.setPadding(0, 18, 0, 18);
+            sw.setChecked(prefs.getBoolean("mix_lang_enabled_" + iso, true));
+            sw.setOnCheckedChangeListener((b, isChecked) ->
+                    prefs.edit().putBoolean("mix_lang_enabled_" + iso, isChecked).apply());
+            list.addView(sw);
+        }
+        sv.addView(list);
+        new android.app.AlertDialog.Builder(requireContext())
+                .setTitle("Active Mix Languages")
+                .setView(sv)
+                .setPositiveButton("Done", null)
+                .show();
+    }
 }
