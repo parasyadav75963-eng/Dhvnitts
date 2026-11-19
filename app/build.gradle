@@ -10,7 +10,7 @@ android {
         applicationId "com.itfb.dhwanitts"
         minSdk 24
         targetSdk 34
-        versionCode (System.getenv("GITHUB_RUN_NUMBER")?.toInteger() ?: 10) + 10
+        versionCode = ((System.getenv("GITHUB_RUN_NUMBER") ?: "10").toInteger() + 10)
         versionName "1.8.0"
 
         // NDK के लिए सिर्फ 64-bit Android (arm64) को टारगेट करना
