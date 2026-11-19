@@ -1,7 +1,7 @@
 {
-  "id": "v1_6_ultimate_release",
-  "title": "DhwaniTTS v1.6 Ultimate Update",
-  "short_msg": "4 Engine Modes, Crystal-Clear Hindi Pronunciation, and Persistent Notification Inbox!",
-  "full_msg": "Welcome to the ultimate DhwaniTTS release by ITFB! This update includes:-\n1. Four Pro Engine Modes: Dhwani Natural, Sonic, Crisp, and Turbo.\n2. Zero-Stutter C++ Anti-Babble & Smart Pronunciation Lexicon for clear Button/App names.\n3. Monster Voice Bug completely fixed with intelligent sample-rate resampling.\n4. Permanent Notifications & Updates Inbox where all announcements stay saved until deleted.\n5. Back Button fix and TalkBack cursor stability.\n\nTap below to download and install the latest APK directly!",
+  "id": "v1_7_toggles_loudness_update",
+  "title": "DhwaniTTS v1.7 Major Update",
+  "short_msg": "TTS Navigation Drawer, Real-Time Language Toggles, Louder Audio & Fixed Updates!",
+  "full_msg": "New DhwaniTTS v1.7 is live! Highlights:\n1. Top-left TTS Navigation Drawer with Real-Time Active Mix Language Toggles.\n2. Fixed Default Voice & Auto TTS multilingual selection.\n3. Louder, clearer audio with RMS + Soft Limiter boost.\n4. Better TalkBack speech rate sync.\n5. Permanent signing key so future updates install smoothly without errors.\n\nNote: Please uninstall the old version once before installing this update.",
   "link": "https://github.com/parasyadav75963-eng/Dhvnitts/releases/download/latest/DhwaniTTS-latest.apk"
 }

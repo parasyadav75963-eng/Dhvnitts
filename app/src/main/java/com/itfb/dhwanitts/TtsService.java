@@ -84,9 +84,11 @@ public class TtsService extends TextToSpeechService {
     @Override public int onLoadVoice(String n) { return onIsValidVoiceName(n); }
 
     @Override public String onGetDefaultVoiceNameFor(String l, String c, String v) {
-        String sv = prefs != null ? prefs.getString("saved_voice_key", "") : "";
-        if (!sv.isEmpty() && !resolveModelPath(sv).isEmpty()) return sv;
         String iso = normalizeLangToIso2(l);
+        String sv = prefs != null ? prefs.getString("saved_voice_key", "") : "";
+        if (!sv.isEmpty() && !resolveModelPath(sv).isEmpty()) {
+            if (l == null || l.isEmpty() || getCleanLocaleForFilename(sv).getLanguage().equalsIgnoreCase(iso)) return sv;
+        }
         for (File f : getInstalledModelFiles()) {
             String k = f.getName().replace(".onnx", "");
             if (getCleanLocaleForFilename(k).getLanguage().equalsIgnoreCase(iso)) return k;
@@ -105,7 +107,11 @@ public class TtsService extends TextToSpeechService {
         return s.length() >= 2 ? s.substring(0, 2) : "en";
     }
 
-    @Override protected String[] onGetLanguage() { return new String[]{"eng", "USA", ""}; }
+    @Override protected String[] onGetLanguage() {
+        String sv = prefs != null ? prefs.getString("saved_voice_key", "") : "";
+        Locale loc = !sv.isEmpty() ? getCleanLocaleForFilename(sv) : Locale.getDefault();
+        return new String[]{loc.getISO3Language(), loc.getISO3Country(), loc.getVariant()};
+    }
 
     @Override protected int onIsLanguageAvailable(String l, String c, String v) {
         String iso = normalizeLangToIso2(l);
@@ -135,6 +141,7 @@ public class TtsService extends TextToSpeechService {
     private String findModelForScript(String langCode, String defPath) {
         if (TextUtils.isEmpty(langCode)) return defPath;
         String iso = normalizeLangToIso2(langCode);
+        if (prefs != null && !prefs.getBoolean("mix_lang_enabled_" + iso, true)) return defPath;
         if (getCleanLocaleForFilename(new File(defPath).getName()).getLanguage().equalsIgnoreCase(iso)) return defPath;
         String suf = defPath.contains("__turbo") ? "__turbo.onnx" : (defPath.contains("__crisp") ? "__crisp.onnx" : (defPath.contains("__sonic") ? "__sonic.onnx" : ".onnx"));
         for (File f : getInstalledModelFiles()) {
@@ -281,7 +288,11 @@ public class TtsService extends TextToSpeechService {
             if (Math.abs(crisp) > peak) peak = Math.abs(crisp);
         }
         int boost = prefs != null ? prefs.getInt("volume_boost", 100) : 100;
-        float gain = Math.max(0.8f, Math.min(1.65f, (24000.0f / peak) * (boost / 100.0f)));
+        double sumSq = 0;
+        for (int i = 0; i < len; i++) sumSq += proc[i] * proc[i];
+        float rms = (float) Math.sqrt(sumSq / Math.max(1, len));
+        float rmsGain = (rms > 100f) ? (9500.0f / rms) : 2.0f;
+        float gain = Math.max(1.3f, Math.min(3.5f, rmsGain * Math.max(1.0f, boost / 100.0f)));
         byte[] out = new byte[len * 2];
         for (int i = 0; i < len; i++) {
             float v = proc[i] * gain;
@@ -308,7 +319,8 @@ public class TtsService extends TextToSpeechService {
             if (userDef.isEmpty()) userDef = getFallbackModel();
 
             String reqV = (Build.VERSION.SDK_INT >= 21 && req.getVoiceName() != null) ? req.getVoiceName() : "";
-            String pri = !userDef.isEmpty() ? userDef : ((!reqV.isEmpty() && !"default_dhwani".equals(reqV)) ? resolveModelPath(reqV) : "");
+            String reqPath = (!reqV.isEmpty() && !"default_dhwani".equals(reqV)) ? resolveModelPath(reqV) : "";
+            String pri = !reqPath.isEmpty() ? reqPath : userDef;
             if (pri.isEmpty() || !new File(pri).exists()) { cb.error(); return; }
 
             String esp = PiperEngine.setupEspeakData(this);
@@ -319,8 +331,9 @@ public class TtsService extends TextToSpeechService {
             int rate = prefs != null ? prefs.getInt("speech_rate", 50) : 50;
             int sysRate = req.getSpeechRate();
             boolean forceSpd = prefs != null && prefs.getBoolean("force_speech", false);
-            float comb = (rate / 50f) * ((!forceSpd && sysRate > 0) ? (sysRate / 100f) : 1f);
-            float spd = Math.max(0.45f, Math.min(2.2f, Math.max(0.35f, comb)));
+            float homeSpd = Math.max(0.5f, Math.min(2.0f, rate / 50f));
+            float tbSpd = (sysRate > 0) ? Math.max(0.5f, Math.min(2.5f, sysRate / 100f)) : 1.0f;
+            float spd = forceSpd ? homeSpd : Math.max(0.45f, Math.min(2.5f, tbSpd * homeSpd));
 
             int numM = prefs != null ? prefs.getInt("num_pos", 0) : 0;
             int puncM = prefs != null ? prefs.getInt("punc_pos", 0) : 0;

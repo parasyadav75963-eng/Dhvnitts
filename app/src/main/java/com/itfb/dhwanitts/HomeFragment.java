@@ -43,6 +43,7 @@ public class HomeFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_home, container, false);
         NotificationHelper.attachHomeBanner(view);
+        attachTtsDrawerButton(view);
         prefs = requireActivity().getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
 
         spinnerLanguage = view.findViewById(R.id.spinner_language);
@@ -106,7 +107,7 @@ public class HomeFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        if (allDownloadedVoices.isEmpty()) refreshAllData();
+        refreshAllData();
     }
 
     private void refreshAllData() {

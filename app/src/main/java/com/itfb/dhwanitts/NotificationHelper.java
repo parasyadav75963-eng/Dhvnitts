@@ -121,7 +121,7 @@ public class NotificationHelper {
                     .setAutoCancel(true)
                     .setContentIntent(pi);
 
-            nm.notify(2026, b.build());
+            nm.notify((int)(System.currentTimeMillis() % 100000), b.build());
         } catch (Exception ignored) {}
     }
 

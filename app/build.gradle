@@ -10,7 +10,7 @@ android {
         applicationId "com.itfb.dhwanitts"
         minSdk 24
         targetSdk 34
-        versionCode 8
+        versionCode (System.getenv("GITHUB_RUN_NUMBER")?.toInteger() ?: 10) + 10
         versionName "1.8.0"
 
         // NDK के लिए सिर्फ 64-bit Android (arm64) को टारगेट करना
@@ -30,6 +30,20 @@ android {
             storeFile file("dhwanitts-Permanent.jks")
             storePassword "dhwani123"
             keyAlias "dhwanitts_key"
+            keyPassword "dhwani123"
+        }
+    }
+    signingConfigs {
+        debug {
+            storeFile file("dhwani.keystore")
+            storePassword "dhwani123"
+            keyAlias "dhwani"
+            keyPassword "dhwani123"
+        }
+        release {
+            storeFile file("dhwani.keystore")
+            storePassword "dhwani123"
+            keyAlias "dhwani"
             keyPassword "dhwani123"
         }
     }
