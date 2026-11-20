@@ -1,7 +1,7 @@
 {
-  "id": "v1_7_toggles_loudness_update",
-  "title": "DhwaniTTS v1.7 Major Update",
-  "short_msg": "TTS Navigation Drawer, Real-Time Language Toggles, Louder Audio & Fixed Updates!",
-  "full_msg": "New DhwaniTTS v1.7 is live! Highlights:\n1. Top-left TTS Navigation Drawer with Real-Time Active Mix Language Toggles.\n2. Fixed Default Voice & Auto TTS multilingual selection.\n3. Louder, clearer audio with RMS + Soft Limiter boost.\n4. Better TalkBack speech rate sync.\n5. Permanent signing key so future updates install smoothly without errors.\n\nNote: Please uninstall the old version once before installing this update.",
-  "link": "https://github.com/parasyadav75963-eng/Dhvnitts/releases/download/latest/DhwaniTTS-latest.apk"
+  "id": "dhwani_official_tutorial_2026",
+  "title": "Watch DhwaniTTS Official Setup Tutorial!",
+  "short_msg": "Learn how to set up DhwaniTTS, download voices, use 4 Pro Modes & Language Toggles.",
+  "full_msg": "Our official step-by-step tutorial for DhwaniTTS by ITFB is now live on YouTube! Watch it to learn how to install and configure DhwaniTTS as your default TTS engine, download Hindi and English voices, switch between the 4 Pro Engine Modes (Natural, Sonic, Crisp, and Turbo), use Real-Time Mix Language Toggles, and sync speech rate smoothly with TalkBack. Tap the link below to watch now!",
+  "link": "https://youtu.be/pt9vaF64-EY?si=fxSYcQs0OgGwDSHW"
 }

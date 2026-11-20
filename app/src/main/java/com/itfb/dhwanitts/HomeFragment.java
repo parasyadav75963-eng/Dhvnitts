@@ -338,11 +338,12 @@ public class HomeFragment extends Fragment {
     }
 
     private void openTtsDrawerMenu() {
-        String[] items = {"Active Mix Languages (Real-Time Toggles)"};
+        String[] items = {"Active Mix Languages (Real-Time Toggles)", "Watch Official Tutorial"};
         new android.app.AlertDialog.Builder(requireContext())
                 .setTitle("TTS Navigation Menu")
                 .setItems(items, (d, which) -> {
                     if (which == 0) showMixLanguageTogglesDialog();
+                    else if (which == 1) startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://youtu.be/pt9vaF64-EY?si=fxSYcQs0OgGwDSHW")));
                 })
                 .setNegativeButton("Close", null)
                 .show();
