@@ -1,7 +1,7 @@
 {
-  "id": "dhwani_official_tutorial_2026",
-  "title": "Watch DhwaniTTS Official Setup Tutorial!",
-  "short_msg": "Learn how to set up DhwaniTTS, download voices, use 4 Pro Modes & Language Toggles.",
-  "full_msg": "Our official step-by-step tutorial for DhwaniTTS by ITFB is now live on YouTube! Watch it to learn how to install and configure DhwaniTTS as your default TTS engine, download Hindi and English voices, switch between the 4 Pro Engine Modes (Natural, Sonic, Crisp, and Turbo), use Real-Time Mix Language Toggles, and sync speech rate smoothly with TalkBack. Tap the link below to watch now!",
-  "link": "https://youtu.be/pt9vaF64-EY?si=fxSYcQs0OgGwDSHW"
+  "id": "notif_1795262744",
+  "title": "DhwaniTTS Major Update Available!",
+  "short_msg": "Smart Time & Battery Announcers, Quiet Hours, Online Voice Preview, Home voice save fix & clearer pronunciation!",
+  "full_msg": "A brand new major update of DhwaniTTS is now live for all users!\n\nWhat Was Fixed:\n- Fixed the Home Tab default voice saving issue so your chosen voice saves and applies smoothly.\n- Improved pronunciation and audio clarity across languages by restoring proper voice synthesis parameters.\n\nWhat's New:\n- Online Voice Preview: Listen to a voice sample before downloading any voice pack.\n- Smart Time Announcer: Automatic time announcements at chosen intervals with 5 custom alert tones and Silent/Vibrate mode support.\n- Smart Battery & Power Announcer: Periodic battery updates, Low Battery (20%) and Full Charge (100%) alerts, plus Charger Connect/Disconnect announcements.\n- Quiet Hours: Pause announcements automatically during your sleep hours.\n- Real-Time Notifications: Instant alerts with a soft, pleasant chime tone.\n\nTap the link below to download and install the latest version now!",
+  "link": "https://github.com/parasyadav75963-eng/Dhvnitts/releases/download/latest/DhwaniTTS-latest.apk"
 }
