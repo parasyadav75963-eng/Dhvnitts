@@ -15,6 +15,7 @@ public class MainActivity extends AppCompatActivity {
 
         NotificationHelper.requestPermissionIfNeeded(this);
         NotificationHelper.checkInBackground(this);
+        AnnouncerService.sync(this);
         try { com.google.firebase.messaging.FirebaseMessaging.getInstance().subscribeToTopic("all_users"); } catch (Exception ignored) {}
         handleNotificationIntent(getIntent());
 

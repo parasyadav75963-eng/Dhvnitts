@@ -24,7 +24,7 @@ struct VoiceInstance {
     Ort::Session* session = nullptr;
     std::string modelPath = "";
     std::string voiceLang = "en-us";
-    float noiseScale = 0.667f, lengthScale = 1.0f, noiseW = 0.8f;
+    float noiseScale = 0.667f;
     std::map<std::string, std::vector<int64_t>> phonemeMap;
 };
 static std::map<std::string, VoiceInstance*> voiceCache;
@@ -331,9 +331,9 @@ Java_com_itfb_dhwanitts_PiperEngine_nativeInit(JNIEnv* env, jclass, jstring mPat
         vi->session = newSession;
         vi->modelPath = currentModelPath;
         vi->voiceLang = currentVoiceLang;
-        vi->noiseScale = modelNoiseScale;
+        vi->noiseScale = 0.667f;
         vi->lengthScale = modelLengthScale;
-        vi->noiseW = modelNoiseW;
+        vi->noiseW = 0.8f;
         vi->phonemeMap = phonemeIdMap;
         voiceCache[reqModel] = vi;
         if (isEspeakInitialized) espeak_SetVoiceByName(currentVoiceLang.c_str());
