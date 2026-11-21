@@ -372,8 +372,8 @@ Java_com_itfb_dhwanitts_PiperEngine_nativeSynthesize(JNIEnv* env, jclass, jstrin
 
         auto mem = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
         int64_t inShape[] = {1, (int64_t)ids.size()}, lenData[] = {(int64_t)ids.size()}, lenShape[] = {1}, scShape[] = {3};
-        float effNoise = (engineSynthMode >= 2) ? 0.15f : 0.22f;
-        float effNoiseW = (engineSynthMode >= 2) ? 0.18f : 0.25f;
+        float effNoise = (engineSynthMode >= 2) ? (modelNoiseScale * 0.65f) : modelNoiseScale;
+        float effNoiseW = (engineSynthMode >= 2) ? (modelNoiseW * 0.65f) : modelNoiseW;
         float modeBoost = (engineSynthMode == 3) ? 1.42f : ((engineSynthMode == 2) ? 1.25f : ((engineSynthMode == 1) ? 1.15f : 1.0f));
         float effLen = modelLengthScale / ((speed > 0.1f ? speed : 1.0f) * modeBoost);
         if (ids.size() < 20 && effLen > 0.85f) effLen *= 0.90f;

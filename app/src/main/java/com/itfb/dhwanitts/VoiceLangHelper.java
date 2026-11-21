@@ -56,9 +56,9 @@ public class VoiceLangHelper {
                 inf = new JSONObject();
                 root.put("inference", inf);
             }
-            inf.put("noise_scale", 0.38);
-            inf.put("length_scale", 0.94);
-            inf.put("noise_w", 0.55);
+            inf.put("noise_scale", 0.667);
+            inf.put("length_scale", 1.0);
+            inf.put("noise_w", 0.8);
 
             JSONObject espeak = root.optJSONObject("espeak");
             if (espeak == null) {

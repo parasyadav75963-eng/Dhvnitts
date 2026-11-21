@@ -85,7 +85,8 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
                 VoiceLangHelper.tuneConfigForZeroStutter(configFile, voice.getKey().replace("__turbo","").replace("__crisp","").replace("__sonic",""));
                 playRealPreview(modelFile.getAbsolutePath(), configFile.getAbsolutePath(), previewText, context);
             } else {
-                Toast.makeText(context, "Please download this voice first to preview!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(context, "Loading online preview...", Toast.LENGTH_SHORT).show();
+                playOnlinePreview(voice, context);
             }
         });
 
@@ -108,6 +109,46 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
             notifyItemChanged(holder.getAdapterPosition());
         });
     }
+    private static android.media.MediaPlayer onlinePlayer;
+
+    private void playOnlinePreview(VoiceModel voice, Context context) {
+        executorService.execute(() -> {
+            try {
+                PiperAudioPlayer.stopAudio();
+                if (onlinePlayer != null) {
+                    try { onlinePlayer.stop(); onlinePlayer.release(); } catch (Exception ignored) {}
+                    onlinePlayer = null;
+                }
+                String mp = voice.getModelPath();
+                if (mp == null) mp = "";
+                mp = mp.replace("https://huggingface.co/rhasspy/piper-voices/resolve/main/", "");
+                int idx = mp.lastIndexOf('/');
+                if (idx <= 0) {
+                    mainHandler.post(() -> Toast.makeText(context, "Preview not available for this voice", Toast.LENGTH_SHORT).show());
+                    return;
+                }
+                String sampleUrl = "https://rhasspy.github.io/piper-samples/samples/" + mp.substring(0, idx) + "/speaker_0.mp3";
+                android.media.MediaPlayer player = new android.media.MediaPlayer();
+                player.setAudioAttributes(new android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build());
+                player.setDataSource(sampleUrl);
+                player.setOnCompletionListener(mp1 -> { try { mp1.release(); } catch (Exception ignored) {} });
+                player.setOnErrorListener((mp1, what, extra) -> {
+                    mainHandler.post(() -> Toast.makeText(context, "Online preview unavailable. Check internet.", Toast.LENGTH_SHORT).show());
+                    try { mp1.release(); } catch (Exception ignored) {}
+                    return true;
+                });
+                player.prepare();
+                onlinePlayer = player;
+                player.start();
+            } catch (Exception e) {
+                mainHandler.post(() -> Toast.makeText(context, "Online preview failed. Check internet.", Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
+
     private void playRealPreview(String modelPath, String configPath, String text, Context context) {
         executorService.execute(() -> {
             try {

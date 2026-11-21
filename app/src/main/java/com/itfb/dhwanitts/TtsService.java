@@ -22,6 +22,7 @@ public class TtsService extends TextToSpeechService {
     private String priMod = "", secMod = "";
     private volatile boolean isStopped = false;
     private SharedPreferences prefs;
+    private AnnouncerReceiver powerReceiver;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -29,6 +30,14 @@ public class TtsService extends TextToSpeechService {
         priEng = new PiperEngine();
         secEng = new PiperEngine();
         NotificationHelper.checkInBackground(this);
+        try {
+            powerReceiver = new AnnouncerReceiver();
+            android.content.IntentFilter pf = new android.content.IntentFilter();
+            pf.addAction(android.content.Intent.ACTION_POWER_CONNECTED);
+            pf.addAction(android.content.Intent.ACTION_POWER_DISCONNECTED);
+            registerReceiver(powerReceiver, pf);
+            AnnouncerReceiver.rescheduleAll(this);
+        } catch (Exception ignored) {}
     }
 
     @Override protected void onStop() { isStopped = true; }
@@ -320,7 +329,7 @@ public class TtsService extends TextToSpeechService {
 
             String reqV = (Build.VERSION.SDK_INT >= 21 && req.getVoiceName() != null) ? req.getVoiceName() : "";
             String reqPath = (!reqV.isEmpty() && !"default_dhwani".equals(reqV)) ? resolveModelPath(reqV) : "";
-            String pri = !reqPath.isEmpty() ? reqPath : userDef;
+            String pri = !userDef.isEmpty() ? userDef : reqPath;
             if (pri.isEmpty() || !new File(pri).exists()) { cb.error(); return; }
 
             String esp = PiperEngine.setupEspeakData(this);
@@ -375,6 +384,7 @@ public class TtsService extends TextToSpeechService {
         isStopped = true;
         if (priEng != null) { priEng.destroyEngine(); priMod = ""; }
         if (secEng != null) { secEng.destroyEngine(); secMod = ""; }
+        try { if (powerReceiver != null) unregisterReceiver(powerReceiver); } catch (Exception ignored) {}
         super.onDestroy();
     }
 }

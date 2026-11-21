@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "655833281134",
+    "project_id": "dwanitts",
+    "storage_bucket": "dwanitts.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:655833281134:android:ffb5c4e1ce9d67b23aec7f",
+        "android_client_info": {
+          "package_name": "Com.itfb.dhwanitts"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyARWVSQhQ6HazJ5Fhz9TAnGmpOCw_NHIOQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
