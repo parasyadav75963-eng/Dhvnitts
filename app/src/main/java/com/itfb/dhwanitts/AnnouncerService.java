@@ -36,6 +36,17 @@ public class AnnouncerService extends Service {
         } catch (Exception ignored) {}
     }
 
+    private String resolveVoiceKey(Context ctx, SharedPreferences p, String prefKey) {
+        String k = p.getString(prefKey, "");
+        if (k == null || k.isEmpty()) k = p.getString("saved_voice_key", "");
+        if (k == null || k.isEmpty()) {
+            java.io.File dir = new java.io.File(ctx.getFilesDir(), "voices");
+            java.io.File[] all = dir.listFiles((d, n) -> n.endsWith(".onnx"));
+            if (all != null && all.length > 0) k = all[0].getName().replace(".onnx", "");
+        }
+        return k == null ? "" : k;
+    }
+
     private boolean isQuietHours(SharedPreferences p) {
         if (!p.getBoolean("quiet_hours_enabled", false)) return false;
         int h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
@@ -68,7 +79,7 @@ public class AnnouncerService extends Service {
                     int iv = mins[Math.min(Math.max(p.getInt("time_ann_interval", 1), 0), 3)];
                     boolean match = (iv == 60) ? (min == 0) : (iv == 45 ? ((h24 * 60 + min) % 45 == 0) : (min % iv == 0));
                     if (match) {
-                        String vKey = p.getString("time_ann_voice", "");
+                        String vKey = resolveVoiceKey(ctx, p, "time_ann_voice");
                         AnnouncerEngine.announce(ctx, AnnouncerLocale.formatTime(vKey, h24, min), vKey, p.getInt("time_ann_tone", 1));
                     }
                 }
@@ -78,7 +89,7 @@ public class AnnouncerService extends Service {
                     int biv = bMins[Math.min(Math.max(p.getInt("bat_ann_interval", 1), 0), 3)];
                     boolean bMatch = (biv == 60) ? (min == 0) : (min % biv == 0);
                     if (bMatch) {
-                        String vKey = p.getString("bat_ann_voice", "");
+                        String vKey = resolveVoiceKey(ctx, p, "bat_ann_voice");
                         int pct = AnnouncerReceiver.getBatteryPercent(ctx);
                         boolean chg = AnnouncerReceiver.isCharging(ctx);
                         AnnouncerEngine.announce(ctx, AnnouncerLocale.formatBattery(vKey, pct, chg), vKey, p.getInt("bat_ann_tone", 1));
@@ -88,7 +99,7 @@ public class AnnouncerService extends Service {
                 if (!p.getBoolean("bat_ann_enabled", false) || !p.getBoolean("bat_ann_charger", true)) return;
                 if (isQuietHours(p) || isBlockedBySilent(p, "bat_ann_silent")) return;
                 boolean connected = Intent.ACTION_POWER_CONNECTED.equals(act);
-                String vKey = p.getString("bat_ann_voice", "");
+                String vKey = resolveVoiceKey(ctx, p, "bat_ann_voice");
                 int pct = AnnouncerReceiver.getBatteryPercent(ctx);
                 AnnouncerEngine.announce(ctx, AnnouncerLocale.formatCharger(vKey, connected, pct), vKey, p.getInt("bat_ann_tone", 1));
             } else if (Intent.ACTION_BATTERY_CHANGED.equals(act)) {
@@ -99,7 +110,7 @@ public class AnnouncerService extends Service {
                 int pct = (level >= 0 && scale > 0) ? (level * 100 / scale) : -1;
                 boolean chg = (status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL);
                 if (pct < 0 || pct == lastBatteryPct) return;
-                String vKey = p.getString("bat_ann_voice", "");
+                String vKey = resolveVoiceKey(ctx, p, "bat_ann_voice");
                 int tone = p.getInt("bat_ann_tone", 1);
                 if (pct == 100 && chg && lastBatteryPct < 100 && p.getBoolean("bat_ann_full", true)) {
                     AnnouncerEngine.announce(ctx, AnnouncerLocale.formatBatteryFull(vKey), vKey, tone);

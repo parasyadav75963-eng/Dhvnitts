@@ -160,7 +160,9 @@ public class AnnouncerDialogs {
             String vKey = (pos >= 0 && pos < filteredVoices.size()) ? filteredVoices.get(pos).getKey() : "";
             String now = new SimpleDateFormat("h:mm a", Locale.US).format(new Date());
             Toast.makeText(ctx, "Testing Time Announcement...", Toast.LENGTH_SHORT).show();
-            AnnouncerEngine.announce(ctx, "The time is " + now, vKey, spTone.getSelectedItemPosition());
+            String effKey = (vKey != null && !vKey.isEmpty()) ? vKey : ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE).getString("saved_voice_key", "");
+            java.util.Calendar cNow = java.util.Calendar.getInstance();
+            AnnouncerEngine.announce(ctx, AnnouncerLocale.formatTime(effKey, cNow.get(java.util.Calendar.HOUR_OF_DAY), cNow.get(java.util.Calendar.MINUTE)), vKey, spTone.getSelectedItemPosition());
         });
         box.addView(btnTest);
 
@@ -227,7 +229,8 @@ public class AnnouncerDialogs {
             int pct = AnnouncerReceiver.getBatteryPercent(ctx);
             boolean chg = AnnouncerReceiver.isCharging(ctx);
             Toast.makeText(ctx, "Testing Battery Announcement...", Toast.LENGTH_SHORT).show();
-            AnnouncerEngine.announce(ctx, "Battery is at " + pct + " percent" + (chg ? ", charging." : "."), vKey, spTone.getSelectedItemPosition());
+            String effKey = (vKey != null && !vKey.isEmpty()) ? vKey : ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE).getString("saved_voice_key", "");
+            AnnouncerEngine.announce(ctx, AnnouncerLocale.formatBattery(effKey, pct, chg), vKey, spTone.getSelectedItemPosition());
         });
         box.addView(btnTest);
 

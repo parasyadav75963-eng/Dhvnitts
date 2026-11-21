@@ -95,7 +95,7 @@ public class AnnouncerEngine {
                     File cFile = new File(mFile.getAbsolutePath() + ".json");
                     if (!cFile.exists()) return;
 
-                    playToneSync(toneIdx);
+                    
 
                     PiperEngine engine = new PiperEngine();
                     String esp = PiperEngine.setupEspeakData(ctx.getApplicationContext());
@@ -105,7 +105,8 @@ public class AnnouncerEngine {
                         byte[] pcm = engine.synthesizeText(text, spd);
                         if (pcm != null && pcm.length > 0) {
                             int sr = VoiceLangHelper.readSampleRate(cFile);
-                            PiperAudioPlayer.playAudio(pcm, sr);
+                            playToneSync(toneIdx);
+                PiperAudioPlayer.playAudio(pcm, sr);
                         }
                     }
                 } catch (Exception ignored) {}

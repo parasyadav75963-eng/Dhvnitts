@@ -5,17 +5,17 @@ public class AnnouncerLocale {
     private static String getLang(String voiceKey) {
         if (voiceKey == null || voiceKey.isEmpty()) return "en";
         String k = voiceKey.toLowerCase();
-        if (k.startsWith("hi") || k.contains("_hi")) return "hi";
-        if (k.startsWith("bn") || k.contains("_bn")) return "bn";
-        if (k.startsWith("te") || k.contains("_te")) return "te";
-        if (k.startsWith("mr") || k.contains("_mr")) return "mr";
-        if (k.startsWith("ta") || k.contains("_ta")) return "ta";
-        if (k.startsWith("gu") || k.contains("_gu")) return "gu";
-        if (k.startsWith("kn") || k.contains("_kn")) return "kn";
-        if (k.startsWith("ml") || k.contains("_ml")) return "ml";
-        if (k.startsWith("pa") || k.contains("_pa")) return "pa";
-        if (k.startsWith("or") || k.contains("_or")) return "or";
-        if (k.startsWith("ur") || k.contains("_ur")) return "ur";
+        if (k.startsWith("hi") || k.contains("_hi") || k.contains("-hi") || k.contains("hindi") || k.contains("pratham") || k.contains("priyamvada") || k.contains("rohan")) return "hi";
+        if (k.startsWith("bn") || k.contains("_bn") || k.contains("-bn") || k.contains("bengali") || k.contains("bangla")) return "bn";
+        if (k.startsWith("te") || k.contains("_te") || k.contains("-te") || k.contains("telugu")) return "te";
+        if (k.startsWith("mr") || k.contains("_mr") || k.contains("-mr") || k.contains("marathi")) return "mr";
+        if (k.startsWith("ta") || k.contains("_ta") || k.contains("-ta") || k.contains("tamil")) return "ta";
+        if (k.startsWith("gu") || k.contains("_gu") || k.contains("-gu") || k.contains("gujarati")) return "gu";
+        if (k.startsWith("kn") || k.contains("_kn") || k.contains("-kn") || k.contains("kannada")) return "kn";
+        if (k.startsWith("ml") || k.contains("_ml") || k.contains("-ml") || k.contains("malayalam") || k.contains("meera") || k.contains("arjun")) return "ml";
+        if (k.startsWith("pa") || k.contains("_pa") || k.contains("-pa") || k.contains("punjabi")) return "pa";
+        if (k.startsWith("or") || k.contains("_or") || k.contains("-or") || k.contains("odia") || k.contains("oriya")) return "or";
+        if (k.startsWith("ur") || k.contains("_ur") || k.contains("-ur") || k.contains("urdu")) return "ur";
         return "en";
     }
 
