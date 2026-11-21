@@ -24,7 +24,7 @@ struct VoiceInstance {
     Ort::Session* session = nullptr;
     std::string modelPath = "";
     std::string voiceLang = "en-us";
-    float noiseScale = 0.667f;
+    float noiseScale = 0.667f, lengthScale = 1.0f, noiseW = 0.8f;
     std::map<std::string, std::vector<int64_t>> phonemeMap;
 };
 static std::map<std::string, VoiceInstance*> voiceCache;
@@ -170,7 +170,7 @@ std::string detectCharLang(uint32_t cp, const std::string& defaultLang) {
     if (cp >= 0x0400 && cp <= 0x04FF) return "ru";
     if ((cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z')) {
         if (defaultLang.find("hi") == 0 || defaultLang.find("bn") == 0 || defaultLang.find("ta") == 0 || defaultLang.find("te") == 0 || defaultLang.find("kn") == 0 || defaultLang.find("ml") == 0 || defaultLang.find("gu") == 0 || defaultLang.find("mr") == 0) {
-            return defaultLang;
+            return "en-us";
         }
         return defaultLang;
     }
@@ -331,9 +331,9 @@ Java_com_itfb_dhwanitts_PiperEngine_nativeInit(JNIEnv* env, jclass, jstring mPat
         vi->session = newSession;
         vi->modelPath = currentModelPath;
         vi->voiceLang = currentVoiceLang;
-        vi->noiseScale = 0.667f;
+        vi->noiseScale = modelNoiseScale;
         vi->lengthScale = modelLengthScale;
-        vi->noiseW = 0.8f;
+        vi->noiseW = modelNoiseW;
         vi->phonemeMap = phonemeIdMap;
         voiceCache[reqModel] = vi;
         if (isEspeakInitialized) espeak_SetVoiceByName(currentVoiceLang.c_str());
@@ -372,8 +372,8 @@ Java_com_itfb_dhwanitts_PiperEngine_nativeSynthesize(JNIEnv* env, jclass, jstrin
 
         auto mem = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
         int64_t inShape[] = {1, (int64_t)ids.size()}, lenData[] = {(int64_t)ids.size()}, lenShape[] = {1}, scShape[] = {3};
-        float effNoise = (engineSynthMode >= 2) ? (modelNoiseScale * 0.65f) : modelNoiseScale;
-        float effNoiseW = (engineSynthMode >= 2) ? (modelNoiseW * 0.65f) : modelNoiseW;
+        float effNoise = (ids.size() < 28) ? 0.30f : (modelNoiseScale > 0.50f ? 0.50f : modelNoiseScale);
+        float effNoiseW = (ids.size() < 28) ? 0.35f : (modelNoiseW > 0.60f ? 0.60f : modelNoiseW);
         float modeBoost = (engineSynthMode == 3) ? 1.42f : ((engineSynthMode == 2) ? 1.25f : ((engineSynthMode == 1) ? 1.15f : 1.0f));
         float effLen = modelLengthScale / ((speed > 0.1f ? speed : 1.0f) * modeBoost);
         if (ids.size() < 20 && effLen > 0.85f) effLen *= 0.90f;
