@@ -198,6 +198,27 @@ public class TtsService extends TextToSpeechService {
         return o.replaceAll("\\s+", " ").trim();
     }
 
+    private void writeSilenceMs(SynthesisCallback cb, int ms, int maxB) {
+        if (ms <= 0 || isStopped) return;
+        int totalBytes = ((22050 * ms) / 1000) * 2;
+        if (totalBytes % 2 != 0) totalBytes++;
+        byte[] sil = new byte[Math.min(maxB, 4096)];
+        int rem = totalBytes;
+        while (rem > 0 && !isStopped) {
+            int len = Math.min(rem, sil.length);
+            cb.audioAvailable(sil, 0, len);
+            rem -= len;
+        }
+    }
+
+    private int getNaturalPauseMs(String chunk) {
+        if (TextUtils.isEmpty(chunk)) return 0;
+        char last = chunk.charAt(chunk.length() - 1);
+        if (last == '.' || last == '।' || last == '?' || last == '!') return 320;
+        if (last == ',' || last == ';' || last == ':') return 150;
+        return 0;
+    }
+
     private byte[] synthDual(String chunk, String mod, String esp, float spd) {
         PiperEngine.applyModeForPath(mod);
         if (mod.equals(priMod)) return priEng.synthesizeText(chunk, spd);
@@ -295,11 +316,15 @@ public class TtsService extends TextToSpeechService {
             String baseIso = getCleanLocaleForFilename(new File(userDef).getName()).getLanguage();
             boolean wrote = false;
 
-            for (String[] seg : segmentByScript(norm, baseIso)) {
+            List<String[]> segs = segmentByScript(norm, baseIso);
+            for (int si = 0; si < segs.size(); si++) {
                 if (isStopped) break;
+                String[] seg = segs.get(si);
                 String target = findModelForScript(seg[1], userDef);
-                for (String ch : splitIntoFastChunks(seg[0])) {
+                List<String> chunks = splitIntoFastChunks(seg[0]);
+                for (int ci = 0; ci < chunks.size(); ci++) {
                     if (isStopped) break;
+                    String ch = chunks.get(ci);
                     byte[] raw = synthDual(ch, target, esp, spd);
                     if (raw != null && raw.length > 0) {
                         int modSr = VoiceLangHelper.readSampleRate(new File(target + ".json"));
@@ -312,6 +337,11 @@ public class TtsService extends TextToSpeechService {
                                 int len = Math.min(maxB, pcm.length - off);
                                 cb.audioAvailable(pcm, off, len);
                                 off += len;
+                            }
+                            boolean hasMore = (ci < chunks.size() - 1) || (si < segs.size() - 1);
+                            if (hasMore && !isStopped) {
+                                int pauseMs = getNaturalPauseMs(ch);
+                                if (pauseMs > 0) writeSilenceMs(cb, pauseMs, maxB);
                             }
                         }
                     }

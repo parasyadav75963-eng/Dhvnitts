@@ -19,7 +19,6 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.provider.ContactsContract;
-import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
 import androidx.core.app.NotificationCompat;
 import java.util.Calendar;
@@ -29,11 +28,10 @@ public class AnnouncerService extends Service {
     private int lastBatteryPct = -1;
     private int lastAnnouncedBatPct = -1;
     private boolean registered = false;
-    private TelephonyManager telephonyManager;
-    private PhoneStateListener phoneStateListener;
     private final Handler callHandler = new Handler(Looper.getMainLooper());
     private Runnable callRepeatRunnable;
     private volatile boolean isRinging = false;
+    private String lastRingingNumber = "";
 
     public static void sync(Context ctx) {
         SharedPreferences p = ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
@@ -98,11 +96,11 @@ public class AnnouncerService extends Service {
         boolean hasNum = !spacedNum.isEmpty();
 
         String target;
-        if (formatIdx == 1) { // Name Only
+        if (formatIdx == 1) {
             target = hasName ? name : (hasNum ? spacedNum : (isHi ? "अज्ञात नंबर" : "Unknown number"));
-        } else if (formatIdx == 2) { // Number Only
+        } else if (formatIdx == 2) {
             target = hasNum ? spacedNum : (isHi ? "अज्ञात नंबर" : "Unknown number");
-        } else { // Name & Number
+        } else {
             if (hasName && hasNum) target = name + ", " + spacedNum;
             else if (hasName) target = name;
             else if (hasNum) target = spacedNum;
@@ -111,48 +109,43 @@ public class AnnouncerService extends Service {
         return isHi ? ("इनकमिंग कॉल, " + target) : ("Incoming call from " + target);
     }
 
-    @SuppressWarnings("deprecation")
-    private void setupCallListener() {
-        try {
-            telephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
-            if (telephonyManager == null) return;
-            phoneStateListener = new PhoneStateListener() {
+    private void handleIncomingCall(Context ctx, String stateStr, String incomingNumber) {
+        SharedPreferences p = ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
+        if (TelephonyManager.EXTRA_STATE_RINGING.equals(stateStr)) {
+            if (!p.getBoolean("call_ann_enabled", true)) return;
+            if (isBlockedBySilent(p, "call_ann_silent")) return;
+
+            // Android 9+ sends 2 broadcasts: first with null number, second with real number
+            if (incomingNumber == null) return;
+            if (isRinging && incomingNumber.equals(lastRingingNumber)) return;
+
+            isRinging = true;
+            lastRingingNumber = incomingNumber;
+            String vKey = resolveVoiceKey(ctx, p, "call_ann_voice");
+            int formatIdx = p.getInt("call_ann_format", 0);
+            int repeatIdx = p.getInt("call_ann_repeat", 1);
+            int maxRepeats = (repeatIdx == 0) ? 1 : (repeatIdx == 1) ? 2 : (repeatIdx == 2) ? 3 : 10;
+            String name = lookupContactName(incomingNumber);
+            String msg = buildCallMessage(vKey, name, incomingNumber, formatIdx);
+
+            if (callRepeatRunnable != null) callHandler.removeCallbacks(callRepeatRunnable);
+            final int[] count = {0};
+            callRepeatRunnable = new Runnable() {
                 @Override
-                public void onCallStateChanged(int state, String incomingNumber) {
-                    if (state == TelephonyManager.CALL_STATE_RINGING) {
-                        SharedPreferences p = getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
-                        if (!p.getBoolean("call_ann_enabled", true)) return;
-                        if (isBlockedBySilent(p, "call_ann_silent")) return;
-
-                        isRinging = true;
-                        String vKey = resolveVoiceKey(AnnouncerService.this, p, "call_ann_voice");
-                        int formatIdx = p.getInt("call_ann_format", 0);
-                        int repeatIdx = p.getInt("call_ann_repeat", 1); // 0=Once, 1=Twice, 2=3 Times, 3=Continuous
-                        int maxRepeats = (repeatIdx == 0) ? 1 : (repeatIdx == 1) ? 2 : (repeatIdx == 2) ? 3 : 10;
-                        String name = lookupContactName(incomingNumber);
-                        String msg = buildCallMessage(vKey, name, incomingNumber, formatIdx);
-
-                        if (callRepeatRunnable != null) callHandler.removeCallbacks(callRepeatRunnable);
-                        final int[] count = {0};
-                        callRepeatRunnable = new Runnable() {
-                            @Override
-                            public void run() {
-                                if (!isRinging || count[0] >= maxRepeats) return;
-                                count[0]++;
-                                AnnouncerEngine.announce(AnnouncerService.this, msg, vKey, 0);
-                                if (count[0] < maxRepeats) callHandler.postDelayed(this, 4500);
-                            }
-                        };
-                        callHandler.post(callRepeatRunnable);
-                    } else {
-                        isRinging = false;
-                        if (callRepeatRunnable != null) callHandler.removeCallbacks(callRepeatRunnable);
-                        AnnouncerEngine.stopCurrent();
-                    }
+                public void run() {
+                    if (!isRinging || count[0] >= maxRepeats) return;
+                    count[0]++;
+                    AnnouncerEngine.announceCall(ctx, msg, vKey);
+                    if (count[0] < maxRepeats) callHandler.postDelayed(this, 4500);
                 }
             };
-            telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
-        } catch (Exception ignored) {}
+            callHandler.postDelayed(callRepeatRunnable, 600);
+        } else if (TelephonyManager.EXTRA_STATE_OFFHOOK.equals(stateStr) || TelephonyManager.EXTRA_STATE_IDLE.equals(stateStr)) {
+            isRinging = false;
+            lastRingingNumber = "";
+            if (callRepeatRunnable != null) callHandler.removeCallbacks(callRepeatRunnable);
+            AnnouncerEngine.stopCurrent();
+        }
     }
 
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
@@ -161,6 +154,13 @@ public class AnnouncerService extends Service {
             if (intent == null || intent.getAction() == null) return;
             SharedPreferences p = ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
             String act = intent.getAction();
+
+            if (TelephonyManager.ACTION_PHONE_STATE_CHANGED.equals(act)) {
+                String state = intent.getStringExtra(TelephonyManager.EXTRA_STATE);
+                String num = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER);
+                handleIncomingCall(ctx, state, num);
+                return;
+            }
 
             if (Intent.ACTION_TIME_TICK.equals(act)) {
                 if (isQuietHours(p)) return;
@@ -239,21 +239,21 @@ public class AnnouncerService extends Service {
             f.addAction(Intent.ACTION_POWER_CONNECTED);
             f.addAction(Intent.ACTION_POWER_DISCONNECTED);
             f.addAction(Intent.ACTION_BATTERY_CHANGED);
-            registerReceiver(receiver, f);
-            setupCallListener();
+            f.addAction(TelephonyManager.ACTION_PHONE_STATE_CHANGED);
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(receiver, f, Context.RECEIVER_EXPORTED);
+            } else {
+                registerReceiver(receiver, f);
+            }
             registered = true;
         }
         return START_STICKY;
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public void onDestroy() {
         isRinging = false;
         if (callRepeatRunnable != null) callHandler.removeCallbacks(callRepeatRunnable);
-        if (telephonyManager != null && phoneStateListener != null) {
-            try { telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE); } catch (Exception ignored) {}
-        }
         if (registered) {
             try { unregisterReceiver(receiver); } catch (Exception ignored) {}
             registered = false;

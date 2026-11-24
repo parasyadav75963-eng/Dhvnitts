@@ -19,7 +19,6 @@ import android.widget.TextView;
 import androidx.core.app.NotificationCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import android.widget.Button;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -33,7 +32,7 @@ public class NotificationHelper {
 
     public static void checkInBackground(Context ctx) {
         long now = System.currentTimeMillis();
-        if (now - lastBgCheckTime < 5 * 60 * 1000L) return; // Check every 5 minutes in background
+        if (now - lastBgCheckTime < 5 * 60 * 1000L) return;
         lastBgCheckTime = now;
         fetchAndProcess(ctx.getApplicationContext(), null);
     }
@@ -66,8 +65,9 @@ public class NotificationHelper {
                     String link = json.optString("link", "");
 
                     SharedPreferences sp = ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
-                    String lastId = sp.getString("last_notif_id", "");
+                    if (sp.getBoolean("deleted_notif_" + id, false)) return;
 
+                    String lastId = sp.getString("last_notif_id", "");
                     boolean isNew = !id.isEmpty() && !id.equals(lastId);
                     SharedPreferences.Editor ed = sp.edit()
                             .putString("cur_notif_id", id)
@@ -84,12 +84,8 @@ public class NotificationHelper {
                     addOrSaveToInbox(ctx, id, title, shortMsg, fullMsg, link);
 
                     new Handler(Looper.getMainLooper()).post(() -> {
-                        if (isNew) {
-                            showSystemPopupNotification(ctx, title, shortMsg);
-                        }
-                        if (ctx instanceof Activity && rootView != null) {
-                            refreshHomeBanner((Activity) ctx, rootView);
-                        }
+                        if (isNew) showSystemPopupNotification(ctx, title, shortMsg);
+                        if (ctx instanceof Activity && rootView != null) refreshHomeBanner(ctx, rootView);
                     });
                 }
             } catch (Exception ignored) {}
@@ -100,15 +96,13 @@ public class NotificationHelper {
         try {
             NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                NotificationChannel ch = new NotificationChannel(
-                        CHANNEL_ID, "Dhwani TTS Live Alerts", NotificationManager.IMPORTANCE_HIGH);
+                NotificationChannel ch = new NotificationChannel(CHANNEL_ID, "Dhwani TTS Live Alerts", NotificationManager.IMPORTANCE_HIGH);
                 ch.enableVibration(true);
                 nm.createNotificationChannel(ch);
             }
             Intent intent = new Intent(ctx, MainActivity.class);
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            PendingIntent pi = PendingIntent.getActivity(
-                    ctx, 101, intent,
+            PendingIntent pi = PendingIntent.getActivity(ctx, 101, intent,
                     PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0));
 
             NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, CHANNEL_ID)
@@ -121,7 +115,7 @@ public class NotificationHelper {
                     .setAutoCancel(true)
                     .setContentIntent(pi);
 
-            nm.notify((int)(System.currentTimeMillis() % 100000), b.build());
+            nm.notify((int) (System.currentTimeMillis() % 100000), b.build());
         } catch (Exception ignored) {}
     }
 
@@ -136,13 +130,7 @@ public class NotificationHelper {
 
     public static void attachHomeBanner(Context ctx, View rootView) {
         if (rootView == null) return;
-        SharedPreferences sp = ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
-        String id = sp.getString("cur_notif_id", "default_welcome");
-        String title = sp.getString("cur_notif_title", "Welcome to Dhwani TTS");
-        String shortMsg = sp.getString("cur_notif_short", "Tap to view latest announcements and voice updates from ITFB.");
-        String fullMsg = sp.getString("cur_notif_full", "Welcome to Dhwani TTS by Interested Technology for Blind. Here you will receive live updates, new voice alerts, and event notifications.");
-        String link = sp.getString("cur_notif_link", "");
-        boolean isUnread = sp.getBoolean("notif_unread_" + id, true);
+        JSONArray inbox = getInboxArray(ctx);
 
         LinearLayout container = null;
         if (rootView instanceof LinearLayout) {
@@ -157,23 +145,27 @@ public class NotificationHelper {
 
         TextView banner = new TextView(ctx);
         banner.setTag("dhwani_notif_banner");
-        String unreadPrefix = isUnread ? "[UNREAD] " : "";
-        banner.setText(unreadPrefix + "🔔 " + title + ": " + shortMsg);
         banner.setTextSize(15f);
         banner.setPadding(32, 28, 32, 28);
-        banner.setBackgroundColor(isUnread ? 0xFF1E3A8A : 0xFF1E293B);
         banner.setTextColor(0xFFFFFFFF);
         banner.setFocusable(true);
         banner.setClickable(true);
-        banner.setContentDescription((isUnread ? "Unread Notification: " : "Notification: ") + title + ". " + shortMsg + ". Double tap to open full details.");
 
-        banner.setOnClickListener(v -> {
-            sp.edit().putBoolean("notif_unread_" + id, false).apply();
-            banner.setText("🔔 " + title + ": " + shortMsg);
+        if (inbox.length() == 0) {
+            banner.setText("🔔 No notifications available");
             banner.setBackgroundColor(0xFF1E293B);
-            banner.setContentDescription("Notification: " + title + ". " + shortMsg + ". Double tap to open full details.");
-            openInboxDialog(ctx, rootView);
-        });
+            banner.setContentDescription("No notifications available");
+            banner.setOnClickListener(v -> openInboxDialog(ctx, rootView));
+        } else {
+            JSONObject top = inbox.optJSONObject(0);
+            String title = top != null ? top.optString("title", "Dhwani TTS Update") : "Dhwani TTS Update";
+            String shortMsg = top != null ? top.optString("short_msg", "") : "";
+            boolean isUnread = top != null && top.optBoolean("unread", true);
+            banner.setText((isUnread ? "[UNREAD] " : "") + "🔔 " + title + ": " + shortMsg);
+            banner.setBackgroundColor(isUnread ? 0xFF1E3A8A : 0xFF1E293B);
+            banner.setContentDescription((isUnread ? "Unread Notification: " : "Notification: ") + title + ". " + shortMsg + ". Double tap to open.");
+            banner.setOnClickListener(v -> openInboxDialog(ctx, rootView));
+        }
         container.addView(banner, 0);
     }
 
@@ -191,8 +183,20 @@ public class NotificationHelper {
                 } catch (Exception ignored) {}
             });
         }
-        builder.show();
+        AlertDialog dlg = builder.create();
+        dlg.setOnDismissListener(d -> {
+            // Auto-clear top matching notification once read
+            JSONArray cur = getInboxArray(ctx);
+            if (cur.length() > 0) {
+                JSONObject first = cur.optJSONObject(0);
+                if (first != null && title.equals(first.optString("title"))) {
+                    deleteById(ctx, first.optString("id"));
+                }
+            }
+        });
+        dlg.show();
     }
+
     public static void requestPermissionIfNeeded(Activity activity) {
         if (Build.VERSION.SDK_INT >= 33 && activity != null) {
             if (activity.checkSelfPermission("android.permission.POST_NOTIFICATIONS") != 0) {
@@ -216,23 +220,14 @@ public class NotificationHelper {
 
     public static JSONArray getInboxArray(Context ctx) {
         SharedPreferences sp = ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
-        try {
-            String raw = sp.getString("notif_inbox_list", "");
-            if (raw != null && !raw.isEmpty()) return new JSONArray(raw);
-        } catch (Exception ignored) {}
-        JSONArray arr = new JSONArray();
-        try {
-            JSONObject def = new JSONObject();
-            def.put("id", sp.getString("cur_notif_id", "welcome_1"));
-            def.put("title", sp.getString("cur_notif_title", "Welcome to Dhwani TTS"));
-            def.put("short_msg", sp.getString("cur_notif_short", "Official updates and voice alerts from ITFB."));
-            def.put("full_msg", sp.getString("cur_notif_full", "Welcome to Dhwani TTS by Interested Technology for Blind. All announcements stay saved here until you delete them."));
-            def.put("link", sp.getString("cur_notif_link", ""));
-            def.put("unread", true);
-            arr.put(def);
-            sp.edit().putString("notif_inbox_list", arr.toString()).apply();
-        } catch (Exception ignored) {}
-        return arr;
+        if (sp.contains("notif_inbox_list")) {
+            try {
+                return new JSONArray(sp.getString("notif_inbox_list", "[]"));
+            } catch (Exception ignored) {
+                return new JSONArray();
+            }
+        }
+        return new JSONArray();
     }
 
     public static void addOrSaveToInbox(Context ctx, String id, String title, String sMsg, String fMsg, String link) {
@@ -246,8 +241,12 @@ public class NotificationHelper {
         }
         try {
             JSONObject n = new JSONObject();
-            n.put("id", id); n.put("title", title); n.put("short_msg", sMsg);
-            n.put("full_msg", fMsg); n.put("link", link); n.put("unread", true);
+            n.put("id", id);
+            n.put("title", title);
+            n.put("short_msg", sMsg);
+            n.put("full_msg", fMsg);
+            n.put("link", link);
+            n.put("unread", true);
             JSONArray updated = new JSONArray();
             updated.put(n);
             for (int i = 0; i < arr.length(); i++) updated.put(arr.get(i));
@@ -255,16 +254,31 @@ public class NotificationHelper {
         } catch (Exception ignored) {}
     }
 
-    public static void openInboxDialog(Context ctx, View bannerToRefresh) {
+    private static void deleteById(Context ctx, String id) {
         SharedPreferences sp = ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
-        String curId = sp.getString("cur_notif_id", "");
-        if (!curId.isEmpty()) {
-            addOrSaveToInbox(ctx, curId, sp.getString("cur_notif_title", ""), sp.getString("cur_notif_short", ""), sp.getString("cur_notif_full", ""), sp.getString("cur_notif_link", ""));
+        JSONArray cur = getInboxArray(ctx);
+        JSONArray next = new JSONArray();
+        for (int i = 0; i < cur.length(); i++) {
+            JSONObject o = cur.optJSONObject(i);
+            if (o != null && !id.equals(o.optString("id"))) {
+                next.put(o);
+            }
         }
+        sp.edit()
+                .putString("notif_inbox_list", next.toString())
+                .putBoolean("deleted_notif_" + id, true)
+                .putBoolean("notif_unread_" + id, false)
+                .apply();
+    }
+
+    public static void openInboxDialog(Context ctx, View bannerToRefresh) {
         JSONArray arr = getInboxArray(ctx);
         if (arr.length() == 0) {
-            new AlertDialog.Builder(ctx).setTitle("Notifications & Updates (0 Available)")
-                .setMessage("No notifications available right now.").setPositiveButton("Close", null).show();
+            new AlertDialog.Builder(ctx)
+                    .setTitle("Notifications & Updates")
+                    .setMessage("No notifications available.")
+                    .setPositiveButton("Close", null)
+                    .show();
             return;
         }
         String[] items = new String[arr.length()];
@@ -274,37 +288,28 @@ public class NotificationHelper {
             items[i] = (un ? "[UNREAD] " : "") + (o != null ? o.optString("title") : "Update") + " - " + (o != null ? o.optString("short_msg") : "");
         }
         new AlertDialog.Builder(ctx)
-            .setTitle("Notifications & Updates (" + arr.length() + " Available)")
-            .setItems(items, (d, idx) -> {
-                try {
+                .setTitle("Notifications & Updates (" + arr.length() + " Available)")
+                .setItems(items, (d, idx) -> {
                     JSONObject sel = arr.optJSONObject(idx);
-                    if (sel == null) return;
-                    sel.put("unread", false);
-                    sp.edit().putString("notif_inbox_list", arr.toString()).putBoolean("notif_unread_" + sel.optString("id"), false).apply();
-                    if (bannerToRefresh != null) refreshHomeBanner(ctx, bannerToRefresh);
-                    showSingleInboxItem(ctx, sel, idx, bannerToRefresh);
-                } catch (Exception ignored) {}
-            })
-            .setPositiveButton("Close", null).show();
+                    if (sel != null) showSingleInboxItem(ctx, sel, bannerToRefresh);
+                })
+                .setPositiveButton("Close", null)
+                .show();
     }
 
-    private static void showSingleInboxItem(Context ctx, JSONObject sel, int idx, View bannerToRefresh) {
+    private static void showSingleInboxItem(Context ctx, JSONObject sel, View bannerToRefresh) {
         String id = sel.optString("id");
         String title = sel.optString("title", "Update");
         String full = sel.optString("full_msg", "");
         String link = sel.optString("link", "");
-        AlertDialog.Builder b = new AlertDialog.Builder(ctx).setTitle(title).setMessage(full).setPositiveButton("Back to List", (d, w) -> openInboxDialog(ctx, bannerToRefresh));
-        b.setNegativeButton("Delete Notification", (d, w) -> {
-            SharedPreferences sp = ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
-            JSONArray cur = getInboxArray(ctx);
-            JSONArray next = new JSONArray();
-            for (int i = 0; i < cur.length(); i++) if (i != idx) next.put(cur.optJSONObject(i));
-            sp.edit().putString("notif_inbox_list", next.toString()).putBoolean("deleted_notif_" + id, true).apply();
-            if (bannerToRefresh != null) refreshHomeBanner(ctx, bannerToRefresh);
-            openInboxDialog(ctx, bannerToRefresh);
-        });
+
+        AlertDialog.Builder b = new AlertDialog.Builder(ctx)
+                .setTitle(title)
+                .setMessage(full)
+                .setPositiveButton("Close", null);
+
         if (link != null && !link.trim().isEmpty()) {
-            b.setNeutralButton("Open Link", (d, w) -> {
+            b.setNeutralButton("Open Link / Download", (d, w) -> {
                 try {
                     Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(link.trim()));
                     i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -312,7 +317,13 @@ public class NotificationHelper {
                 } catch (Exception ignored) {}
             });
         }
-        b.show();
-    }
 
+        AlertDialog dlg = b.create();
+        dlg.setOnDismissListener(d -> {
+            // पढ़कर बाहर आते ही ऑटो-डिलीट
+            deleteById(ctx, id);
+            if (bannerToRefresh != null) refreshHomeBanner(ctx, bannerToRefresh);
+        });
+        dlg.show();
+    }
 }
