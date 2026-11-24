@@ -66,7 +66,7 @@ public class AnnouncerEngine {
                 }
             }
             AudioTrack track = new AudioTrack.Builder()
-                    .setAudioAttributes(new AudioAttributes.Builder().setUsage(isCall ? AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY : AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                    .setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
                     .setAudioFormat(new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(sr).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
                     .setBufferSizeInBytes(Math.max(pcm.length, 4096))
                     .setTransferMode(AudioTrack.MODE_STATIC).build();
@@ -83,7 +83,9 @@ public class AnnouncerEngine {
         try {
             int minBuf = AudioTrack.getMinBufferSize(sr, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
             AudioTrack track = new AudioTrack.Builder()
-                    .setAudioAttributes(new AudioAttributes.Builder().setUsage(isCall ? AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY : AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                    .setAudioAttributes(new AudioAttributes.Builder()
+                            .setUsage(isCall ? AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY : AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
                     .setAudioFormat(new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(sr).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
                     .setBufferSizeInBytes(Math.max(minBuf * 2, 8192))
                     .setTransferMode(AudioTrack.MODE_STREAM).build();
@@ -102,8 +104,14 @@ public class AnnouncerEngine {
         } catch (Exception ignored) {}
     }
 
-    public static void announceCall(Context ctx, String text, String voiceKey) { announceInternal(ctx, text, voiceKey, 0, true); }
-    public static void announce(Context ctx, String text, String voiceKey, int toneIdx) { announceInternal(ctx, text, voiceKey, toneIdx, false); }
+    public static void announceCall(Context ctx, String text, String voiceKey) {
+        announceInternal(ctx, text, voiceKey, 0, true);
+    }
+
+    public static void announce(Context ctx, String text, String voiceKey, int toneIdx) {
+        announceInternal(ctx, text, voiceKey, toneIdx, false);
+    }
+
     private static void announceInternal(Context ctx, String text, String voiceKey, int toneIdx, boolean isCall) {
         if (ctx == null || text == null || text.trim().isEmpty()) return;
         final Context appCtx = ctx.getApplicationContext();
