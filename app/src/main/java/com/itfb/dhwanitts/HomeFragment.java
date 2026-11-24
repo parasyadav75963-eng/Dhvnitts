@@ -3,8 +3,6 @@ package com.itfb.dhwanitts;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -23,6 +21,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.List;
 
 public class HomeFragment extends Fragment {
 
@@ -32,11 +31,34 @@ public class HomeFragment extends Fragment {
     private TextView tvSpeechRate, tvPitch, tvActiveConfigSummary;
     private Switch switchForceSpeech, switchForcePitch;
 
-    private ArrayList<VoiceModel> allDownloadedVoices = new ArrayList<>();
-    private ArrayList<String> downloadedLanguages = new ArrayList<>();
-    private ArrayList<VoiceModel> currentVoicesForLang = new ArrayList<>();
-    private Handler mainHandler = new Handler(Looper.getMainLooper());
-    private boolean userTouchedLang = false;
+    private final ArrayList<VoiceModel> allDownloadedVoices = new ArrayList<>();
+    private final ArrayList<String> downloadedLanguages = new ArrayList<>();
+    private final ArrayList<VoiceModel> currentVoicesForLang = new ArrayList<>();
+
+    private ArrayAdapter<String> makeVisibleAdapter(List<String> items) {
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(requireContext(), android.R.layout.simple_spinner_item, items) {
+            @NonNull
+            @Override
+            public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
+                View v = super.getView(position, convertView, parent);
+                if (v instanceof TextView) {
+                    TextView tv = (TextView) v;
+                    tv.setTextColor(0xFFFFFFFF);
+                    tv.setTextSize(15f);
+                    tv.setPadding(16, 16, 16, 16);
+                }
+                return v;
+            }
+        };
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        return adapter;
+    }
+
+    private ArrayAdapter<String> makeVisibleAdapter(String[] items) {
+        ArrayList<String> list = new ArrayList<>();
+        for (String s : items) list.add(s);
+        return makeVisibleAdapter(list);
+    }
 
     @Nullable
     @Override
@@ -60,11 +82,8 @@ public class HomeFragment extends Fragment {
         switchForcePitch = view.findViewById(R.id.switch_force_pitch);
         switchForceSpeech = view.findViewById(R.id.switch_force_speech);
 
-        String[] numOpts = {"Read Full Number Words", "Read Digit by Digit"};
-        spinnerNumber.setAdapter(new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, numOpts));
-
-        String[] puncOpts = {"None", "Some", "Most", "All"};
-        spinnerPunctuation.setAdapter(new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, puncOpts));
+        spinnerNumber.setAdapter(makeVisibleAdapter(new String[]{"Read Full Number Words", "Read Digit by Digit"}));
+        spinnerPunctuation.setAdapter(makeVisibleAdapter(new String[]{"None", "Some", "Most", "All"}));
 
         seekbarSpeechRate.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar sb, int p, boolean u) { tvSpeechRate.setText("Speech Rate: " + p + "%"); }
@@ -82,23 +101,15 @@ public class HomeFragment extends Fragment {
             @Override
             public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
                 if (pos >= 0 && pos < downloadedLanguages.size()) {
-                    String selectedLang = downloadedLanguages.get(pos);
-                    String savedKey = prefs.getString("saved_voice_key", "");
-                    updateVoiceSpinners(selectedLang, savedKey);
+                    updateVoiceSpinners(downloadedLanguages.get(pos), prefs.getString("saved_voice_key", ""));
                 }
             }
             @Override public void onNothingSelected(AdapterView<?> p) {}
         });
 
         view.findViewById(R.id.btn_test).setOnClickListener(v -> testVoicePreview());
-        view.findViewById(R.id.btn_save_settings).setOnClickListener(v -> {
-            saveSettings();
-            updateActiveConfigDisplay();
-        });
-        view.findViewById(R.id.btn_reset).setOnClickListener(v -> {
-            resetSettings();
-            updateActiveConfigDisplay();
-        });
+        view.findViewById(R.id.btn_save_settings).setOnClickListener(v -> { saveSettings(); updateActiveConfigDisplay(); });
+        view.findViewById(R.id.btn_reset).setOnClickListener(v -> { resetSettings(); updateActiveConfigDisplay(); });
 
         refreshAllData();
         return view;
@@ -111,7 +122,6 @@ public class HomeFragment extends Fragment {
     }
 
     private void refreshAllData() {
-        userTouchedLang = false;
         scanDownloadedVoices();
         loadSavedSettings();
         updateActiveConfigDisplay();
@@ -138,13 +148,10 @@ public class HomeFragment extends Fragment {
         File[] files = voicesDir.listFiles((dir, name) -> name.endsWith(".onnx"));
         if (files != null) {
             for (File file : files) {
-                String fname = file.getName();
-                String rawKey = fname.substring(0, fname.length() - 5);
+                String rawKey = file.getName().substring(0, file.getName().length() - 5);
                 String modeTag = rawKey.endsWith("__turbo") ? " [Turbo]" : (rawKey.endsWith("__crisp") ? " [Crisp]" : (rawKey.endsWith("__sonic") ? " [Sonic]" : " [Natural]"));
                 String key = rawKey.replace("__turbo", "").replace("__crisp", "").replace("__sonic", "");
-                String langName = "Language";
-                String voiceName = key;
-                String quality = "medium";
+                String langName = "Language", voiceName = key, quality = "medium";
 
                 if (root.has(key)) {
                     try {
@@ -156,23 +163,22 @@ public class HomeFragment extends Fragment {
                     } catch (Exception ignored) {}
                 } else if (key.contains("-")) {
                     String[] parts = key.split("-");
-                    String codePart = parts[0].toLowerCase();
-                    if (codePart.startsWith("hi")) langName = "Hindi";
-                    else if (codePart.startsWith("en")) langName = "English";
-                    else if (codePart.startsWith("ne")) langName = "Nepali";
-                    else if (codePart.startsWith("mr")) langName = "Marathi";
-                    else if (codePart.startsWith("gu")) langName = "Gujarati";
-                    else if (codePart.startsWith("bn")) langName = "Bengali";
-                    else if (codePart.startsWith("ta")) langName = "Tamil";
-                    else if (codePart.startsWith("te")) langName = "Telugu";
-                    else if (codePart.startsWith("kn")) langName = "Kannada";
-                    else if (codePart.startsWith("ml")) langName = "Malayalam";
+                    String c = parts[0].toLowerCase();
+                    if (c.startsWith("hi")) langName = "Hindi";
+                    else if (c.startsWith("en")) langName = "English";
+                    else if (c.startsWith("ne")) langName = "Nepali";
+                    else if (c.startsWith("mr")) langName = "Marathi";
+                    else if (c.startsWith("gu")) langName = "Gujarati";
+                    else if (c.startsWith("bn")) langName = "Bengali";
+                    else if (c.startsWith("ta")) langName = "Tamil";
+                    else if (c.startsWith("te")) langName = "Telugu";
+                    else if (c.startsWith("kn")) langName = "Kannada";
+                    else if (c.startsWith("ml")) langName = "Malayalam";
                     else langName = parts[0].toUpperCase();
                     if (parts.length > 1) voiceName = parts[1];
                 }
 
-                String mPath = file.getAbsolutePath();
-                String cPath = mPath + ".json";
+                String mPath = file.getAbsolutePath(), cPath = mPath + ".json";
                 if (new File(cPath).exists()) {
                     allDownloadedVoices.add(new VoiceModel(rawKey, langName, "", voiceName + modeTag + " (" + quality + ")", quality, mPath, cPath, "", true));
                     if (!downloadedLanguages.contains(langName)) downloadedLanguages.add(langName);
@@ -181,7 +187,7 @@ public class HomeFragment extends Fragment {
         }
 
         if (downloadedLanguages.isEmpty()) downloadedLanguages.add("Open Voice Library to download");
-        spinnerLanguage.setAdapter(new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, downloadedLanguages));
+        spinnerLanguage.setAdapter(makeVisibleAdapter(downloadedLanguages));
     }
 
     private void updateVoiceSpinners(String lang, String targetKey) {
@@ -196,13 +202,12 @@ public class HomeFragment extends Fragment {
             }
         }
         if (vNames.isEmpty()) vNames.add("No Voice Available");
-        spinnerVoice.setAdapter(new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, vNames));
+        spinnerVoice.setAdapter(makeVisibleAdapter(vNames));
         if (!vNames.isEmpty() && targetIdx < vNames.size()) spinnerVoice.setSelection(targetIdx, false);
     }
 
     private void loadSavedSettings() {
-        int rate = prefs.getInt("speech_rate", 50);
-        int pitch = prefs.getInt("pitch_rate", 50);
+        int rate = prefs.getInt("speech_rate", 50), pitch = prefs.getInt("pitch_rate", 50);
         seekbarSpeechRate.setProgress(rate);
         seekbarPitch.setProgress(pitch);
         tvSpeechRate.setText("Speech Rate: " + rate + "%");
@@ -216,18 +221,12 @@ public class HomeFragment extends Fragment {
         String savedKey = prefs.getString("saved_voice_key", "");
         String savedLang = "";
         for (VoiceModel vm : allDownloadedVoices) {
-            if (vm.getKey().equals(savedKey)) {
-                savedLang = vm.getLanguageName();
-                break;
-            }
+            if (vm.getKey().equals(savedKey)) { savedLang = vm.getLanguageName(); break; }
         }
 
         if (!savedLang.isEmpty()) {
             int langIdx = downloadedLanguages.indexOf(savedLang);
-            if (langIdx >= 0) {
-                spinnerLanguage.setSelection(langIdx, false);
-                updateVoiceSpinners(savedLang, savedKey);
-            }
+            if (langIdx >= 0) { spinnerLanguage.setSelection(langIdx, false); updateVoiceSpinners(savedLang, savedKey); }
         } else if (!allDownloadedVoices.isEmpty()) {
             spinnerLanguage.setSelection(0, false);
             updateVoiceSpinners(downloadedLanguages.get(0), allDownloadedVoices.get(0).getKey());
@@ -264,22 +263,16 @@ public class HomeFragment extends Fragment {
             VoiceModel first = allDownloadedVoices.get(0);
             priDisplay = first.getLanguageName() + " - " + first.getVoiceName();
         }
-        int rate = prefs.getInt("speech_rate", 50);
-        int pitch = prefs.getInt("pitch_rate", 50);
-        tvActiveConfigSummary.setText("Active Voice: " + priDisplay + "\nSpeech Rate: " + rate + "% | Pitch: " + pitch + "% | Volume: 100%");
+        tvActiveConfigSummary.setText("Active Voice: " + priDisplay + "\nSpeech Rate: " + prefs.getInt("speech_rate", 50) + "% | Pitch: " + prefs.getInt("pitch_rate", 50) + "% | Volume: 100%");
     }
 
     private void testVoicePreview() {
         int vPos = spinnerVoice.getSelectedItemPosition();
-        if (vPos < 0 || vPos >= currentVoicesForLang.size()) {
-            Toast.makeText(getContext(), "Please select a downloaded voice first!", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        if (vPos < 0 || vPos >= currentVoicesForLang.size()) { Toast.makeText(getContext(), "Please select a downloaded voice first!", Toast.LENGTH_SHORT).show(); return; }
         final VoiceModel testVm = currentVoicesForLang.get(vPos);
         final float speed = Math.max(0.25f, seekbarSpeechRate.getProgress() / 50.0f);
         final float pitchFactor = 0.5f + (seekbarPitch.getProgress() / 100.0f);
-        final int baseSr = VoiceLangHelper.readSampleRate(new File(testVm.getConfigPath()));
-        final int playRate = Math.max(8000, Math.min(48000, (int) (baseSr * pitchFactor)));
+        final int playRate = Math.max(8000, Math.min(48000, (int) (VoiceLangHelper.readSampleRate(new File(testVm.getConfigPath())) * pitchFactor)));
         final Context appCtx = requireContext().getApplicationContext();
 
         Toast.makeText(getContext(), "Playing Preview...", Toast.LENGTH_SHORT).show();
@@ -288,10 +281,12 @@ public class HomeFragment extends Fragment {
                 try {
                     PiperEngine engine = new PiperEngine();
                     String espeak = PiperEngine.setupEspeakData(appCtx);
-                    VoiceLangHelper.tuneConfigForZeroStutter(new File(testVm.getConfigPath()), testVm.getKey().replace("__turbo","").replace("__crisp","").replace("__sonic",""));
+                    String cleanKey = testVm.getKey().replace("__turbo","").replace("__crisp","").replace("__sonic","");
+                    VoiceLangHelper.tuneConfigForZeroStutter(new File(testVm.getConfigPath()), cleanKey);
                     PiperEngine.applyModeForPath(testVm.getModelPath());
                     if (engine.initEngine(testVm.getModelPath(), testVm.getConfigPath(), espeak)) {
-                        byte[] pcm = engine.synthesizeText(VoiceLangHelper.getSampleTextForVoice(testVm.getKey().replace("__turbo","").replace("__crisp","").replace("__sonic","")), speed / pitchFactor);
+                        String sample = PronunciationDictionary.apply(appCtx, VoiceLangHelper.getSampleTextForVoice(cleanKey));
+                        byte[] pcm = engine.synthesizeText(sample, speed / pitchFactor);
                         if (pcm != null && pcm.length > 0) PiperAudioPlayer.playAudio(pcm, playRate);
                     }
                 } catch (Exception ignored) {}
@@ -316,18 +311,13 @@ public class HomeFragment extends Fragment {
 
     private void attachTtsDrawerButton(View rootView) {
         android.widget.LinearLayout container = null;
-        if (rootView instanceof android.widget.LinearLayout) {
-            container = (android.widget.LinearLayout) rootView;
-        } else if (rootView instanceof ViewGroup) {
-            ViewGroup vg = (ViewGroup) rootView;
-            if (vg.getChildCount() > 0 && vg.getChildAt(0) instanceof android.widget.LinearLayout) {
-                container = (android.widget.LinearLayout) vg.getChildAt(0);
-            }
+        if (rootView instanceof android.widget.LinearLayout) container = (android.widget.LinearLayout) rootView;
+        else if (rootView instanceof ViewGroup && ((ViewGroup) rootView).getChildCount() > 0 && ((ViewGroup) rootView).getChildAt(0) instanceof android.widget.LinearLayout) {
+            container = (android.widget.LinearLayout) ((ViewGroup) rootView).getChildAt(0);
         }
         if (container == null || container.findViewWithTag("tts_drawer_btn") != null) return;
         android.widget.LinearLayout bar = new android.widget.LinearLayout(requireContext());
         bar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-        bar.setGravity(android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL);
         android.widget.Button btn = new android.widget.Button(requireContext());
         btn.setTag("tts_drawer_btn");
         btn.setText("☰ TTS Menu");
@@ -342,6 +332,7 @@ public class HomeFragment extends Fragment {
             "Active Mix Languages (Real-Time Toggles)",
             "Smart Time Announcer",
             "Smart Battery & Power Announcer",
+            "Smart Call Announcer",
             "Quiet Hours Settings",
             "Watch Official Tutorial"
         };
@@ -351,8 +342,9 @@ public class HomeFragment extends Fragment {
                     if (which == 0) showMixLanguageTogglesDialog();
                     else if (which == 1) AnnouncerDialogs.showTimeAnnouncerDialog(requireContext(), allDownloadedVoices);
                     else if (which == 2) AnnouncerDialogs.showBatteryAnnouncerDialog(requireContext(), allDownloadedVoices);
-                    else if (which == 3) AnnouncerDialogs.showQuietHoursDialog(requireContext());
-                    else if (which == 4) startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://youtu.be/pt9vaF64-EY?si=fxSYcQs0OgGwDSHW")));
+                    else if (which == 3) AnnouncerDialogs.showCallAnnouncerDialog(requireContext(), allDownloadedVoices);
+                    else if (which == 4) AnnouncerDialogs.showQuietHoursDialog(requireContext());
+                    else if (which == 5) startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://youtu.be/pt9vaF64-EY?si=fxSYcQs0OgGwDSHW")));
                 })
                 .setNegativeButton("Close", null)
                 .show();
@@ -365,31 +357,22 @@ public class HomeFragment extends Fragment {
             String iso = k.length() >= 2 ? k.substring(0, 2) : "en";
             if (!langMap.containsKey(iso)) langMap.put(iso, vm.getLanguageName());
         }
-        if (langMap.isEmpty()) {
-            Toast.makeText(getContext(), "No downloaded voices found!", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        if (langMap.isEmpty()) { Toast.makeText(getContext(), "No downloaded voices found!", Toast.LENGTH_SHORT).show(); return; }
         android.widget.ScrollView sv = new android.widget.ScrollView(requireContext());
         android.widget.LinearLayout list = new android.widget.LinearLayout(requireContext());
         list.setOrientation(android.widget.LinearLayout.VERTICAL);
         list.setPadding(48, 24, 48, 24);
         for (java.util.Map.Entry<String, String> e : langMap.entrySet()) {
-            final String iso = e.getKey();
-            final String name = e.getValue();
+            final String iso = e.getKey(), name = e.getValue();
             Switch sw = new Switch(requireContext());
             sw.setText(name + " (" + iso.toUpperCase() + ")");
             sw.setTextSize(16f);
             sw.setPadding(0, 18, 0, 18);
             sw.setChecked(prefs.getBoolean("mix_lang_enabled_" + iso, true));
-            sw.setOnCheckedChangeListener((b, isChecked) ->
-                    prefs.edit().putBoolean("mix_lang_enabled_" + iso, isChecked).apply());
+            sw.setOnCheckedChangeListener((b, isChecked) -> prefs.edit().putBoolean("mix_lang_enabled_" + iso, isChecked).apply());
             list.addView(sw);
         }
         sv.addView(list);
-        new android.app.AlertDialog.Builder(requireContext())
-                .setTitle("Active Mix Languages")
-                .setView(sv)
-                .setPositiveButton("Done", null)
-                .show();
+        new android.app.AlertDialog.Builder(requireContext()).setTitle("Active Mix Languages").setView(sv).setPositiveButton("Done", null).show();
     }
 }

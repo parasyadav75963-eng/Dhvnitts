@@ -9,11 +9,19 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.Switch;
+import android.widget.TextView;
 import android.widget.Toast;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 import org.json.JSONObject;
@@ -25,7 +33,10 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.TimeZone;
 
 public class SettingsActivity extends AppCompatActivity {
@@ -48,16 +59,50 @@ public class SettingsActivity extends AppCompatActivity {
         Button btnContact = findViewById(R.id.btn_contact_developer);
 
         String[] fonts = {"Small", "Medium (Default)", "Large", "Extra Large"};
-        spinnerFont.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, fonts));
+        ArrayAdapter<String> fontAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, fonts) {
+            @NonNull
+            @Override
+            public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
+                View v = super.getView(position, convertView, parent);
+                if (v instanceof TextView) {
+                    TextView tv = (TextView) v;
+                    tv.setTextColor(0xFFFFFFFF);
+                    tv.setTextSize(15f);
+                    tv.setPadding(16, 16, 16, 16);
+                }
+                return v;
+            }
+        };
+        fontAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerFont.setAdapter(fontAdapter);
 
         switchDark.setChecked(prefs.getBoolean("dark_mode", true));
         switchWifi.setChecked(prefs.getBoolean("wifi_only", false));
         switchContrast.setChecked(prefs.getBoolean("high_contrast", true));
-        spinnerFont.setSelection(prefs.getInt("font_size_pos", 1));
+        spinnerFont.setSelection(prefs.getInt("font_size_pos", 1), false);
 
         switchDark.setOnCheckedChangeListener((b, v) -> prefs.edit().putBoolean("dark_mode", v).apply());
         switchWifi.setOnCheckedChangeListener((b, v) -> prefs.edit().putBoolean("wifi_only", v).apply());
         switchContrast.setOnCheckedChangeListener((b, v) -> prefs.edit().putBoolean("high_contrast", v).apply());
+        spinnerFont.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> p, View v, int pos, long id) { prefs.edit().putInt("font_size_pos", pos).apply(); }
+            @Override public void onNothingSelected(AdapterView<?> p) {}
+        });
+
+        // Add Pronunciation Dictionary Editor button inside App Settings
+        if (btnBattery != null && btnBattery.getParent() instanceof LinearLayout) {
+            LinearLayout parentLayout = (LinearLayout) btnBattery.getParent();
+            Button btnDict = new Button(this);
+            btnDict.setText("Pronunciation Dictionary Editor");
+            btnDict.setContentDescription("Open Pronunciation Dictionary Editor to add or remove custom word pronunciations");
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.bottomMargin = 24;
+            btnDict.setLayoutParams(lp);
+            btnDict.setOnClickListener(v -> openDictionaryEditorDialog());
+            int idx = parentLayout.indexOfChild(btnBattery);
+            parentLayout.addView(btnDict, Math.max(0, idx));
+        }
 
         btnBattery.setOnClickListener(v -> requestBatteryExemption());
         btnUpdate.setOnClickListener(v -> checkForGitHubUpdate(this));
@@ -65,12 +110,75 @@ public class SettingsActivity extends AppCompatActivity {
         btnContact.setOnClickListener(v -> {
             Intent email = new Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:contact.i.t.f.b@gmail.com"));
             email.putExtra(Intent.EXTRA_SUBJECT, "DhwaniTTS Support");
-            try {
-                startActivity(Intent.createChooser(email, "Contact Developer"));
-            } catch (Exception e) {
-                Toast.makeText(this, "No email app found", Toast.LENGTH_SHORT).show();
-            }
+            try { startActivity(Intent.createChooser(email, "Contact Developer")); }
+            catch (Exception e) { Toast.makeText(this, "No email app found", Toast.LENGTH_SHORT).show(); }
         });
+    }
+
+    private void openDictionaryEditorDialog() {
+        Map<String, String> entries = PronunciationDictionary.getCustomEntries(this);
+        List<String> keys = new ArrayList<>(entries.keySet());
+        String[] displayItems = new String[keys.size()];
+        for (int i = 0; i < keys.size(); i++) {
+            String k = keys.get(i);
+            displayItems[i] = k + "  →  " + entries.get(k);
+        }
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+                .setTitle("Pronunciation Dictionary (" + keys.size() + " Words)");
+
+        if (keys.isEmpty()) {
+            builder.setMessage("No custom words added yet. Tap 'Add New Word' to fix any word's pronunciation.");
+        } else {
+            builder.setItems(displayItems, (d, which) -> {
+                String selectedWord = keys.get(which);
+                new AlertDialog.Builder(this)
+                        .setTitle("Remove Word?")
+                        .setMessage("Delete '" + selectedWord + " → " + entries.get(selectedWord) + "' from dictionary?")
+                        .setPositiveButton("Delete", (d2, w2) -> {
+                            PronunciationDictionary.removeEntry(this, selectedWord);
+                            Toast.makeText(this, "Deleted: " + selectedWord, Toast.LENGTH_SHORT).show();
+                            openDictionaryEditorDialog();
+                        })
+                        .setNegativeButton("Cancel", (d2, w2) -> openDictionaryEditorDialog())
+                        .show();
+            });
+        }
+
+        builder.setPositiveButton("Add New Word", (d, w) -> showAddWordDialog())
+               .setNegativeButton("Close", null)
+               .show();
+    }
+
+    private void showAddWordDialog() {
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(48, 24, 48, 24);
+
+        EditText etWord = new EditText(this);
+        etWord.setHint("Original Word (e.g. Chhuikhadan or UPI)");
+        layout.addView(etWord);
+
+        EditText etReplace = new EditText(this);
+        etReplace.setHint("Pronounce As (e.g. Chhui khadaan or U P I)");
+        layout.addView(etReplace);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Add Custom Pronunciation")
+                .setView(layout)
+                .setPositiveButton("Save", (d, w) -> {
+                    String word = etWord.getText().toString().trim();
+                    String rep = etReplace.getText().toString().trim();
+                    if (word.isEmpty() || rep.isEmpty()) {
+                        Toast.makeText(this, "Both fields are required!", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    PronunciationDictionary.saveEntry(this, word, rep);
+                    Toast.makeText(this, "Saved: " + word + " → " + rep, Toast.LENGTH_SHORT).show();
+                    openDictionaryEditorDialog();
+                })
+                .setNegativeButton("Cancel", (d, w) -> openDictionaryEditorDialog())
+                .show();
     }
 
     private void requestBatteryExemption() {
@@ -118,28 +226,20 @@ public class SettingsActivity extends AppCompatActivity {
 
                 String savedSha = prefs.getString("installed_commit_sha", "");
                 boolean isLatest = latestSha.equals(savedSha) || (apkTimeMs >= (commitTimeMs - 120000));
-                if (isLatest) {
-                    prefs.edit().putString("installed_commit_sha", latestSha).apply();
-                }
+                if (isLatest) prefs.edit().putString("installed_commit_sha", latestSha).apply();
 
                 android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
                 mainHandler.post(() -> {
                     if (isLatest) {
                         Toast.makeText(ctx, "Latest update is already installed!", Toast.LENGTH_LONG).show();
-                        new AlertDialog.Builder(ctx)
-                                .setTitle("Up to Date")
+                        new AlertDialog.Builder(ctx).setTitle("Up to Date")
                                 .setMessage("Latest update is already installed (" + latestSha + ").")
-                                .setPositiveButton("OK", null)
-                                .show();
+                                .setPositiveButton("OK", null).show();
                     } else {
-                        new AlertDialog.Builder(ctx)
-                                .setTitle("New Update Available (" + latestSha + ")")
+                        new AlertDialog.Builder(ctx).setTitle("New Update Available (" + latestSha + ")")
                                 .setMessage("What's New:\n" + commitMsg + "\n\nTap below to download and install the update directly inside the app.")
-                                .setPositiveButton("Download & Install Update", (d, w) -> {
-                                    downloadAndInstallApk(ctx, latestSha);
-                                })
-                                .setNegativeButton("Cancel", null)
-                                .show();
+                                .setPositiveButton("Download & Install Update", (d, w) -> downloadAndInstallApk(ctx, latestSha))
+                                .setNegativeButton("Cancel", null).show();
                     }
                 });
             } catch (Exception e) {
@@ -152,10 +252,8 @@ public class SettingsActivity extends AppCompatActivity {
     public static void downloadAndInstallApk(Context ctx, String targetSha) {
         android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
         AlertDialog progressDialog = new AlertDialog.Builder(ctx)
-                .setTitle("Downloading Update...")
-                .setMessage("Starting download, please wait...")
-                .setCancelable(false)
-                .create();
+                .setTitle("Downloading Update...").setMessage("Starting download, please wait...")
+                .setCancelable(false).create();
         progressDialog.show();
 
         new Thread(() -> {
@@ -174,10 +272,8 @@ public class SettingsActivity extends AppCompatActivity {
                 FileOutputStream out = new FileOutputStream(outFile);
 
                 byte[] buf = new byte[8192];
-                int count;
+                int count, lastPercent = -1;
                 long downloaded = 0;
-                int lastPercent = -1;
-
                 while ((count = in.read(buf)) != -1) {
                     downloaded += count;
                     out.write(buf, 0, count);
@@ -190,12 +286,8 @@ public class SettingsActivity extends AppCompatActivity {
                         }
                     }
                 }
-                out.flush();
-                out.close();
-                in.close();
-
+                out.flush(); out.close(); in.close();
                 pendingCommitSha = targetSha;
-
                 mainHandler.post(() -> {
                     progressDialog.dismiss();
                     Toast.makeText(ctx, "Download complete! Opening installer...", Toast.LENGTH_LONG).show();
@@ -218,8 +310,7 @@ public class SettingsActivity extends AppCompatActivity {
         super.onResume();
         if (pendingApkFile != null && pendingApkFile.exists()) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || getPackageManager().canRequestPackageInstalls()) {
-                File f = pendingApkFile;
-                pendingApkFile = null;
+                File f = pendingApkFile; pendingApkFile = null;
                 installApkFile(this, f);
             }
         }
@@ -227,24 +318,20 @@ public class SettingsActivity extends AppCompatActivity {
 
     private static void installApkFile(Context ctx, File apkFile) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                if (!ctx.getPackageManager().canRequestPackageInstalls()) {
-                    Toast.makeText(ctx, "Please allow 'Install unknown apps' for DhwaniTTS first.", Toast.LENGTH_LONG).show();
-                    Intent permIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                            Uri.parse("package:" + ctx.getPackageName()));
-                    permIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    pendingApkFile = apkFile;
-                    ctx.startActivity(permIntent);
-                    return;
-                }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ctx.getPackageManager().canRequestPackageInstalls()) {
+                Toast.makeText(ctx, "Please allow 'Install unknown apps' for DhwaniTTS first.", Toast.LENGTH_LONG).show();
+                Intent permIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + ctx.getPackageName()));
+                permIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                pendingApkFile = apkFile;
+                ctx.startActivity(permIntent);
+                return;
             }
             Uri apkUri = FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".fileprovider", apkFile);
             Intent install = new Intent(Intent.ACTION_VIEW);
             install.setDataAndType(apkUri, "application/vnd.android.package-archive");
             install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
             if (pendingCommitSha != null && !pendingCommitSha.isEmpty()) {
-                ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE)
-                        .edit().putString("installed_commit_sha", pendingCommitSha).apply();
+                ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE).edit().putString("installed_commit_sha", pendingCommitSha).apply();
                 pendingCommitSha = null;
             }
             ctx.startActivity(install);

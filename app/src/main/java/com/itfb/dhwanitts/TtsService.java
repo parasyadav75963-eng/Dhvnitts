@@ -22,7 +22,6 @@ public class TtsService extends TextToSpeechService {
     private String priMod = "", secMod = "";
     private volatile boolean isStopped = false;
     private SharedPreferences prefs;
-    private AnnouncerReceiver powerReceiver;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -30,43 +29,28 @@ public class TtsService extends TextToSpeechService {
         priEng = new PiperEngine();
         secEng = new PiperEngine();
         NotificationHelper.checkInBackground(this);
-        try {
-            powerReceiver = new AnnouncerReceiver();
-            android.content.IntentFilter pf = new android.content.IntentFilter();
-            pf.addAction(android.content.Intent.ACTION_POWER_CONNECTED);
-            pf.addAction(android.content.Intent.ACTION_POWER_DISCONNECTED);
-            registerReceiver(powerReceiver, pf);
-            AnnouncerReceiver.rescheduleAll(this);
-        } catch (Exception ignored) {}
+        try { AnnouncerService.sync(this); } catch (Exception ignored) {}
     }
 
     @Override protected void onStop() { isStopped = true; }
+
     private Locale getCleanLocaleForFilename(String f) {
         String l = f.toLowerCase(Locale.ROOT);
         if (l.startsWith("en_in") || l.contains("-en_in")) return new Locale("en", "IN");
         if (l.startsWith("en_gb") || l.contains("-en_gb")) return new Locale("en", "GB");
         if (l.startsWith("en_") || l.startsWith("en-")) return new Locale("en", "US");
         String[] codes = {"hi","mr","te","ta","ml","bn","gu","kn","pa","or","as","sa","ur"};
-        for (String c : codes) {
-            if (l.startsWith(c + "_") || l.startsWith(c + "-")) return new Locale(c, "IN");
-        }
+        for (String c : codes) if (l.startsWith(c + "_") || l.startsWith(c + "-")) return new Locale(c, "IN");
         if (l.startsWith("ne_") || l.startsWith("ne-")) return new Locale("ne", "NP");
         String[] p = f.split("[-_]");
-        if (p.length >= 2 && p[0].length() == 2 && p[1].length() == 2) {
-            return new Locale(p[0].toLowerCase(Locale.ROOT), p[1].toUpperCase(Locale.ROOT));
-        }
+        if (p.length >= 2 && p[0].length() == 2 && p[1].length() == 2) return new Locale(p[0].toLowerCase(Locale.ROOT), p[1].toUpperCase(Locale.ROOT));
         return new Locale("en", "US");
     }
 
     private List<File> getInstalledModelFiles() {
         List<File> m = new ArrayList<>();
-        File d = new File(getFilesDir(), "voices");
-        File[] fs = d.listFiles();
-        if (fs != null) {
-            for (File f : fs) {
-                if (f.isFile() && f.getName().endsWith(".onnx") && f.length() > 100000) m.add(f);
-            }
-        }
+        File[] fs = new File(getFilesDir(), "voices").listFiles();
+        if (fs != null) for (File f : fs) if (f.isFile() && f.getName().endsWith(".onnx") && f.length() > 100000) m.add(f);
         Collections.sort(m, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
         return m;
     }
@@ -83,6 +67,7 @@ public class TtsService extends TextToSpeechService {
         }
         return list;
     }
+
     @Override public int onIsValidVoiceName(String n) {
         if (TextUtils.isEmpty(n)) return TextToSpeech.ERROR;
         String p = resolveModelPath(n);
@@ -93,17 +78,13 @@ public class TtsService extends TextToSpeechService {
     @Override public int onLoadVoice(String n) { return onIsValidVoiceName(n); }
 
     @Override public String onGetDefaultVoiceNameFor(String l, String c, String v) {
-        String iso = normalizeLangToIso2(l);
         String sv = prefs != null ? prefs.getString("saved_voice_key", "") : "";
-        if (!sv.isEmpty() && !resolveModelPath(sv).isEmpty()) {
-            if (l == null || l.isEmpty() || getCleanLocaleForFilename(sv).getLanguage().equalsIgnoreCase(iso)) return sv;
-        }
+        if (!sv.isEmpty() && !resolveModelPath(sv).isEmpty()) return sv;
+        String iso = normalizeLangToIso2(l);
         for (File f : getInstalledModelFiles()) {
             String k = f.getName().replace(".onnx", "");
             if (getCleanLocaleForFilename(k).getLanguage().equalsIgnoreCase(iso)) return k;
         }
-        String s = prefs != null ? prefs.getString("saved_voice_key", "") : "";
-        if (!s.isEmpty() && !resolveModelPath(s).isEmpty()) return s;
         List<File> all = getInstalledModelFiles();
         return all.isEmpty() ? "en_US-lessac-medium" : all.get(0).getName().replace(".onnx", "");
     }
@@ -124,13 +105,12 @@ public class TtsService extends TextToSpeechService {
 
     @Override protected int onIsLanguageAvailable(String l, String c, String v) {
         String iso = normalizeLangToIso2(l);
-        for (File f : getInstalledModelFiles()) {
-            if (getCleanLocaleForFilename(f.getName()).getLanguage().equalsIgnoreCase(iso)) return TextToSpeech.LANG_COUNTRY_AVAILABLE;
-        }
+        for (File f : getInstalledModelFiles()) if (getCleanLocaleForFilename(f.getName()).getLanguage().equalsIgnoreCase(iso)) return TextToSpeech.LANG_COUNTRY_AVAILABLE;
         return !getInstalledModelFiles().isEmpty() ? TextToSpeech.LANG_AVAILABLE : TextToSpeech.LANG_MISSING_DATA;
     }
 
     @Override protected int onLoadLanguage(String l, String c, String v) { return onIsLanguageAvailable(l, c, v); }
+
     private String resolveModelPath(String k) {
         if (TextUtils.isEmpty(k)) return "";
         File d = new File(k);
@@ -141,9 +121,7 @@ public class TtsService extends TextToSpeechService {
 
     private String getFallbackModel() {
         List<File> list = getInstalledModelFiles();
-        for (File f : list) {
-            if (getCleanLocaleForFilename(f.getName()).getLanguage().equals("en")) return f.getAbsolutePath();
-        }
+        for (File f : list) if (getCleanLocaleForFilename(f.getName()).getLanguage().equals("en")) return f.getAbsolutePath();
         return list.isEmpty() ? "" : list.get(0).getAbsolutePath();
     }
 
@@ -157,9 +135,7 @@ public class TtsService extends TextToSpeechService {
             String fn = f.getName();
             if (getCleanLocaleForFilename(fn).getLanguage().equalsIgnoreCase(iso) && fn.endsWith(suf)) return f.getAbsolutePath();
         }
-        for (File f : getInstalledModelFiles()) {
-            if (getCleanLocaleForFilename(f.getName()).getLanguage().equalsIgnoreCase(iso)) return f.getAbsolutePath();
-        }
+        for (File f : getInstalledModelFiles()) if (getCleanLocaleForFilename(f.getName()).getLanguage().equalsIgnoreCase(iso)) return f.getAbsolutePath();
         return defPath;
     }
 
@@ -177,6 +153,7 @@ public class TtsService extends TextToSpeechService {
         if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) return "en";
         return "";
     }
+
     private List<String[]> segmentByScript(String text, String defaultLang) {
         List<String[]> segs = new ArrayList<>();
         if (TextUtils.isEmpty(text)) return segs;
@@ -185,17 +162,12 @@ public class TtsService extends TextToSpeechService {
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
             String det = detectCharLang(c);
-            if (det.isEmpty()) {
-                sb.append(c);
-            } else if (cur.isEmpty() || cur.equals(det)) {
-                cur = det;
-                sb.append(c);
-            } else {
+            if (det.isEmpty()) sb.append(c);
+            else if (cur.isEmpty() || cur.equals(det)) { cur = det; sb.append(c); }
+            else {
                 String s = sb.toString().trim();
                 if (!s.isEmpty()) segs.add(new String[]{s, cur});
-                sb.setLength(0);
-                sb.append(c);
-                cur = det;
+                sb.setLength(0); sb.append(c); cur = det;
             }
         }
         String rem = sb.toString().trim();
@@ -216,37 +188,25 @@ public class TtsService extends TextToSpeechService {
 
     private String cleanAndNormalizeText(String in, int numMode, int puncMode) {
         if (TextUtils.isEmpty(in)) return "";
-        String o = in.replaceAll("([a-z])([A-Z])", "$1 $2")
-                .replaceAll("([A-Z]+)([A-Z][a-z])", "$1 $2")
-                .replace("_", " ").replace("-", " ");
-        o = o.replaceAll("(?i)\\btts\\b", "T T S")
-                .replaceAll("(?i)\\bapk\\b", "A P K")
-                .replaceAll("(?i)\\bui\\b", "U I")
-                .replaceAll("(?i)\\bwifi\\b", "Wi-Fi")
-                .replaceAll("(?i)\\bbtn\\b", "button")
-                .replaceAll("(?i)\\bmb\\b", "megabytes")
-                .replaceAll("(?i)\\bgb\\b", "gigabytes")
-                .replaceAll("(?i)\\bkb\\b", "kilobytes")
-                .replaceAll("(?i)\\bitfb\\b", "I T F B");
+        String o = PronunciationDictionary.apply(this, in);
+        o = o.replaceAll("([a-z])([A-Z])", "$1 $2").replaceAll("([A-Z]+)([A-Z][a-z])", "$1 $2").replace("_", " ").replace("-", " ");
+        o = o.replaceAll("(?i)\\btts\\b", "T T S").replaceAll("(?i)\\bapk\\b", "A P K").replaceAll("(?i)\\bui\\b", "U I")
+             .replaceAll("(?i)\\bwifi\\b", "Wi-Fi").replaceAll("(?i)\\bbtn\\b", "button").replaceAll("(?i)\\bmb\\b", "megabytes")
+             .replaceAll("(?i)\\bgb\\b", "gigabytes").replaceAll("(?i)\\bkb\\b", "kilobytes").replaceAll("(?i)\\bitfb\\b", "I T F B");
         if (numMode == 1) o = o.replaceAll("(\\d)", " $1 ");
         if (puncMode == 0) o = o.replaceAll("[*#~^`|<>{}\\[\\]\\\\]", " ");
         return o.replaceAll("\\s+", " ").trim();
     }
+
     private byte[] synthDual(String chunk, String mod, String esp, float spd) {
         PiperEngine.applyModeForPath(mod);
         if (mod.equals(priMod)) return priEng.synthesizeText(chunk, spd);
         if (mod.equals(secMod)) return secEng.synthesizeText(chunk, spd);
         if (priMod.isEmpty()) {
-            if (priEng.initEngine(mod, mod + ".json", esp)) {
-                priMod = mod;
-                return priEng.synthesizeText(chunk, spd);
-            }
+            if (priEng.initEngine(mod, mod + ".json", esp)) { priMod = mod; return priEng.synthesizeText(chunk, spd); }
         } else {
             VoiceLangHelper.tuneConfigForZeroStutter(new File(mod + ".json"), new File(mod).getName().replace(".onnx", "").replace("__turbo","").replace("__crisp","").replace("__sonic",""));
-            if (secEng.initEngine(mod, mod + ".json", esp)) {
-                secMod = mod;
-                return secEng.synthesizeText(chunk, spd);
-            }
+            if (secEng.initEngine(mod, mod + ".json", esp)) { secMod = mod; return secEng.synthesizeText(chunk, spd); }
         }
         return null;
     }
@@ -256,13 +216,11 @@ public class TtsService extends TextToSpeechService {
         if (clean == null || clean.length < 4) return clean;
         double step = ((double) inSr / (double) outSr) * pitch;
         if (Math.abs(step - 1.0) < 0.02) return clean;
-        int inSamples = clean.length / 2;
-        int outSamples = Math.max(1, (int) (inSamples / step));
+        int inSamples = clean.length / 2, outSamples = Math.max(1, (int) (inSamples / step));
         byte[] out = new byte[outSamples * 2];
         for (int i = 0; i < outSamples; i++) {
             double srcIdx = i * step;
-            int idx0 = (int) srcIdx;
-            int idx1 = Math.min(idx0 + 1, inSamples - 1);
+            int idx0 = (int) srcIdx, idx1 = Math.min(idx0 + 1, inSamples - 1);
             double frac = srcIdx - idx0;
             short s0 = (short) (((clean[idx0 * 2 + 1]) << 8) | (clean[idx0 * 2] & 0xFF));
             short s1 = (short) (((clean[idx1 * 2 + 1]) << 8) | (clean[idx1 * 2] & 0xFF));
@@ -272,13 +230,12 @@ public class TtsService extends TextToSpeechService {
         }
         return out;
     }
+
     private byte[] enhanceHdClarityAndLoudness(byte[] rawPcm) {
         if (rawPcm == null || rawPcm.length < 4) return rawPcm;
         int n = rawPcm.length / 2;
         short[] s = new short[n];
-        for (int i = 0; i < n; i++) {
-            s[i] = (short) (((rawPcm[i * 2 + 1]) << 8) | (rawPcm[i * 2] & 0xFF));
-        }
+        for (int i = 0; i < n; i++) s[i] = (short) (((rawPcm[i * 2 + 1]) << 8) | (rawPcm[i * 2] & 0xFF));
         int st = 0, en = n - 1, thr = 180;
         while (st < n - 160 && Math.abs(s[st]) < thr) st++;
         st = Math.max(0, st - 64);
@@ -286,22 +243,14 @@ public class TtsService extends TextToSpeechService {
         en = Math.min(n - 1, en + 160);
         int len = en - st + 1;
         if (len <= 0) return new byte[0];
-
         float[] proc = new float[len];
-        float peak = 1.0f, prev = 0f;
-        for (int i = 0; i < len; i++) {
-            float cur = s[st + i];
-            float crisp = cur - (0.18f * prev);
-            prev = cur;
-            proc[i] = crisp;
-            if (Math.abs(crisp) > peak) peak = Math.abs(crisp);
-        }
+        float prev = 0f;
+        for (int i = 0; i < len; i++) { float cur = s[st + i]; proc[i] = cur - (0.18f * prev); prev = cur; }
         int boost = prefs != null ? prefs.getInt("volume_boost", 100) : 100;
         double sumSq = 0;
         for (int i = 0; i < len; i++) sumSq += proc[i] * proc[i];
         float rms = (float) Math.sqrt(sumSq / Math.max(1, len));
-        float rmsGain = (rms > 100f) ? (9500.0f / rms) : 2.0f;
-        float gain = Math.max(1.3f, Math.min(3.5f, rmsGain * Math.max(1.0f, boost / 100.0f)));
+        float gain = Math.max(1.3f, Math.min(3.5f, ((rms > 100f) ? (9500.0f / rms) : 2.0f) * Math.max(1.0f, boost / 100.0f)));
         byte[] out = new byte[len * 2];
         for (int i = 0; i < len; i++) {
             float v = proc[i] * gain;
@@ -313,27 +262,20 @@ public class TtsService extends TextToSpeechService {
         }
         return out;
     }
+
     @Override protected void onSynthesizeText(SynthesisRequest req, SynthesisCallback cb) {
         isStopped = false;
         NotificationHelper.checkInBackground(this);
         CharSequence cs = req.getCharSequenceText();
-        if (TextUtils.isEmpty(cs)) {
-            cb.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1);
-            cb.done();
-            return;
-        }
+        if (TextUtils.isEmpty(cs)) { cb.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1); cb.done(); return; }
         synchronized (PiperEngine.class) {
             String userDef = prefs != null ? resolveModelPath(prefs.getString("saved_voice_key", "")) : "";
             if (userDef.isEmpty() && prefs != null) userDef = resolveModelPath(prefs.getString("saved_model_path", ""));
             if (userDef.isEmpty()) userDef = getFallbackModel();
-
-            String reqV = (Build.VERSION.SDK_INT >= 21 && req.getVoiceName() != null) ? req.getVoiceName() : "";
-            String reqPath = (!reqV.isEmpty() && !"default_dhwani".equals(reqV)) ? resolveModelPath(reqV) : "";
-            String pri = !userDef.isEmpty() ? userDef : reqPath;
-            if (pri.isEmpty() || !new File(pri).exists()) { cb.error(); return; }
+            if (userDef.isEmpty() || !new File(userDef).exists()) { cb.error(); return; }
 
             String esp = PiperEngine.setupEspeakData(this);
-            if (!priMod.equals(userDef) && new File(userDef).exists()) {
+            if (!priMod.equals(userDef)) {
                 VoiceLangHelper.tuneConfigForZeroStutter(new File(userDef + ".json"), new File(userDef).getName().replace(".onnx", ""));
                 if (priEng.initEngine(userDef, userDef + ".json", esp)) priMod = userDef;
             }
@@ -350,12 +292,12 @@ public class TtsService extends TextToSpeechService {
 
             cb.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1);
             int maxB = cb.getMaxBufferSize() > 0 ? cb.getMaxBufferSize() : 4096;
-            String baseIso = getCleanLocaleForFilename(new File(pri).getName()).getLanguage();
+            String baseIso = getCleanLocaleForFilename(new File(userDef).getName()).getLanguage();
             boolean wrote = false;
 
             for (String[] seg : segmentByScript(norm, baseIso)) {
                 if (isStopped) break;
-                String target = findModelForScript(seg[1], pri);
+                String target = findModelForScript(seg[1], userDef);
                 for (String ch : splitIntoFastChunks(seg[0])) {
                     if (isStopped) break;
                     byte[] raw = synthDual(ch, target, esp, spd);
@@ -384,7 +326,6 @@ public class TtsService extends TextToSpeechService {
         isStopped = true;
         if (priEng != null) { priEng.destroyEngine(); priMod = ""; }
         if (secEng != null) { secEng.destroyEngine(); secMod = ""; }
-        try { if (powerReceiver != null) unregisterReceiver(powerReceiver); } catch (Exception ignored) {}
         super.onDestroy();
     }
 }

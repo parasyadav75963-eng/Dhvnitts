@@ -10,21 +10,36 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
+import android.database.Cursor;
 import android.media.AudioManager;
+import android.net.Uri;
 import android.os.BatteryManager;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
+import android.provider.ContactsContract;
+import android.telephony.PhoneStateListener;
+import android.telephony.TelephonyManager;
 import androidx.core.app.NotificationCompat;
 import java.util.Calendar;
 
 public class AnnouncerService extends Service {
     private static final String CH_ID = "dhwani_announcer_fg";
     private int lastBatteryPct = -1;
+    private int lastAnnouncedBatPct = -1;
     private boolean registered = false;
+    private TelephonyManager telephonyManager;
+    private PhoneStateListener phoneStateListener;
+    private final Handler callHandler = new Handler(Looper.getMainLooper());
+    private Runnable callRepeatRunnable;
+    private volatile boolean isRinging = false;
 
     public static void sync(Context ctx) {
         SharedPreferences p = ctx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
-        boolean need = p.getBoolean("time_ann_enabled", false) || p.getBoolean("bat_ann_enabled", false);
+        boolean need = p.getBoolean("time_ann_enabled", false)
+                || p.getBoolean("bat_ann_enabled", false)
+                || p.getBoolean("call_ann_enabled", true);
         Intent i = new Intent(ctx, AnnouncerService.class);
         try {
             if (need) {
@@ -40,8 +55,7 @@ public class AnnouncerService extends Service {
         String k = p.getString(prefKey, "");
         if (k == null || k.isEmpty()) k = p.getString("saved_voice_key", "");
         if (k == null || k.isEmpty()) {
-            java.io.File dir = new java.io.File(ctx.getFilesDir(), "voices");
-            java.io.File[] all = dir.listFiles((d, n) -> n.endsWith(".onnx"));
+            java.io.File[] all = new java.io.File(ctx.getFilesDir(), "voices").listFiles((d, n) -> n.endsWith(".onnx"));
             if (all != null && all.length > 0) k = all[0].getName().replace(".onnx", "");
         }
         return k == null ? "" : k;
@@ -61,6 +75,86 @@ public class AnnouncerService extends Service {
         return am != null && am.getRingerMode() != AudioManager.RINGER_MODE_NORMAL;
     }
 
+    private String lookupContactName(String number) {
+        if (number == null || number.trim().isEmpty()) return "";
+        try {
+            Uri uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number));
+            try (Cursor c = getContentResolver().query(uri, new String[]{ContactsContract.PhoneLookup.DISPLAY_NAME}, null, null, null)) {
+                if (c != null && c.moveToFirst()) return c.getString(0);
+            }
+        } catch (Exception ignored) {}
+        return "";
+    }
+
+    private String formatSpacedNumber(String num) {
+        if (num == null) return "";
+        return num.replaceAll("[^0-9+]", "").replaceAll("(\\d)", "$1 ").trim();
+    }
+
+    private String buildCallMessage(String voiceKey, String name, String number, int formatIdx) {
+        boolean isHi = voiceKey != null && voiceKey.toLowerCase().startsWith("hi");
+        String spacedNum = formatSpacedNumber(number);
+        boolean hasName = name != null && !name.trim().isEmpty();
+        boolean hasNum = !spacedNum.isEmpty();
+
+        String target;
+        if (formatIdx == 1) { // Name Only
+            target = hasName ? name : (hasNum ? spacedNum : (isHi ? "अज्ञात नंबर" : "Unknown number"));
+        } else if (formatIdx == 2) { // Number Only
+            target = hasNum ? spacedNum : (isHi ? "अज्ञात नंबर" : "Unknown number");
+        } else { // Name & Number
+            if (hasName && hasNum) target = name + ", " + spacedNum;
+            else if (hasName) target = name;
+            else if (hasNum) target = spacedNum;
+            else target = isHi ? "अज्ञात नंबर" : "Unknown number";
+        }
+        return isHi ? ("इनकमिंग कॉल, " + target) : ("Incoming call from " + target);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void setupCallListener() {
+        try {
+            telephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
+            if (telephonyManager == null) return;
+            phoneStateListener = new PhoneStateListener() {
+                @Override
+                public void onCallStateChanged(int state, String incomingNumber) {
+                    if (state == TelephonyManager.CALL_STATE_RINGING) {
+                        SharedPreferences p = getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
+                        if (!p.getBoolean("call_ann_enabled", true)) return;
+                        if (isBlockedBySilent(p, "call_ann_silent")) return;
+
+                        isRinging = true;
+                        String vKey = resolveVoiceKey(AnnouncerService.this, p, "call_ann_voice");
+                        int formatIdx = p.getInt("call_ann_format", 0);
+                        int repeatIdx = p.getInt("call_ann_repeat", 1); // 0=Once, 1=Twice, 2=3 Times, 3=Continuous
+                        int maxRepeats = (repeatIdx == 0) ? 1 : (repeatIdx == 1) ? 2 : (repeatIdx == 2) ? 3 : 10;
+                        String name = lookupContactName(incomingNumber);
+                        String msg = buildCallMessage(vKey, name, incomingNumber, formatIdx);
+
+                        if (callRepeatRunnable != null) callHandler.removeCallbacks(callRepeatRunnable);
+                        final int[] count = {0};
+                        callRepeatRunnable = new Runnable() {
+                            @Override
+                            public void run() {
+                                if (!isRinging || count[0] >= maxRepeats) return;
+                                count[0]++;
+                                AnnouncerEngine.announce(AnnouncerService.this, msg, vKey, 0);
+                                if (count[0] < maxRepeats) callHandler.postDelayed(this, 4500);
+                            }
+                        };
+                        callHandler.post(callRepeatRunnable);
+                    } else {
+                        isRinging = false;
+                        if (callRepeatRunnable != null) callHandler.removeCallbacks(callRepeatRunnable);
+                        AnnouncerEngine.stopCurrent();
+                    }
+                }
+            };
+            telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
+        } catch (Exception ignored) {}
+    }
+
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context ctx, Intent intent) {
@@ -70,29 +164,16 @@ public class AnnouncerService extends Service {
 
             if (Intent.ACTION_TIME_TICK.equals(act)) {
                 if (isQuietHours(p)) return;
-                Calendar cal = Calendar.getInstance();
-                int h24 = cal.get(Calendar.HOUR_OF_DAY);
-                int min = cal.get(Calendar.MINUTE);
-
                 if (p.getBoolean("time_ann_enabled", false) && !isBlockedBySilent(p, "time_ann_silent")) {
+                    Calendar cal = Calendar.getInstance();
+                    int h24 = cal.get(Calendar.HOUR_OF_DAY);
+                    int min = cal.get(Calendar.MINUTE);
                     int[] mins = {15, 30, 45, 60};
                     int iv = mins[Math.min(Math.max(p.getInt("time_ann_interval", 1), 0), 3)];
                     boolean match = (iv == 60) ? (min == 0) : (iv == 45 ? ((h24 * 60 + min) % 45 == 0) : (min % iv == 0));
                     if (match) {
                         String vKey = resolveVoiceKey(ctx, p, "time_ann_voice");
                         AnnouncerEngine.announce(ctx, AnnouncerLocale.formatTime(vKey, h24, min), vKey, p.getInt("time_ann_tone", 1));
-                    }
-                }
-
-                if (p.getBoolean("bat_ann_enabled", false) && !isBlockedBySilent(p, "bat_ann_silent")) {
-                    int[] bMins = {5, 15, 30, 60};
-                    int biv = bMins[Math.min(Math.max(p.getInt("bat_ann_interval", 1), 0), 3)];
-                    boolean bMatch = (biv == 60) ? (min == 0) : (min % biv == 0);
-                    if (bMatch) {
-                        String vKey = resolveVoiceKey(ctx, p, "bat_ann_voice");
-                        int pct = AnnouncerReceiver.getBatteryPercent(ctx);
-                        boolean chg = AnnouncerReceiver.isCharging(ctx);
-                        AnnouncerEngine.announce(ctx, AnnouncerLocale.formatBattery(vKey, pct, chg), vKey, p.getInt("bat_ann_tone", 1));
                     }
                 }
             } else if (Intent.ACTION_POWER_CONNECTED.equals(act) || Intent.ACTION_POWER_DISCONNECTED.equals(act)) {
@@ -110,12 +191,21 @@ public class AnnouncerService extends Service {
                 int pct = (level >= 0 && scale > 0) ? (level * 100 / scale) : -1;
                 boolean chg = (status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL);
                 if (pct < 0 || pct == lastBatteryPct) return;
+
                 String vKey = resolveVoiceKey(ctx, p, "bat_ann_voice");
                 int tone = p.getInt("bat_ann_tone", 1);
+                int[] pctSteps = {5, 10, 15, 20};
+                int step = pctSteps[Math.min(Math.max(p.getInt("bat_ann_interval", 1), 0), 3)];
+
                 if (pct == 100 && chg && lastBatteryPct < 100 && p.getBoolean("bat_ann_full", true)) {
                     AnnouncerEngine.announce(ctx, AnnouncerLocale.formatBatteryFull(vKey), vKey, tone);
+                    lastAnnouncedBatPct = pct;
                 } else if (pct <= 20 && !chg && (lastBatteryPct > 20 || lastBatteryPct == -1) && p.getBoolean("bat_ann_low", true)) {
                     AnnouncerEngine.announce(ctx, AnnouncerLocale.formatBatteryLow(vKey, pct), vKey, tone);
+                    lastAnnouncedBatPct = pct;
+                } else if (lastBatteryPct != -1 && pct % step == 0 && pct != lastAnnouncedBatPct) {
+                    AnnouncerEngine.announce(ctx, AnnouncerLocale.formatBattery(vKey, pct, chg), vKey, tone);
+                    lastAnnouncedBatPct = pct;
                 }
                 lastBatteryPct = pct;
             }
@@ -133,7 +223,7 @@ public class AnnouncerService extends Service {
         Notification n = new NotificationCompat.Builder(this, CH_ID)
                 .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
                 .setContentTitle("DhwaniTTS Smart Announcer Active")
-                .setContentText("Monitoring Time & Battery alerts in background")
+                .setContentText("Monitoring Time, Battery & Calls in background")
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
@@ -150,13 +240,20 @@ public class AnnouncerService extends Service {
             f.addAction(Intent.ACTION_POWER_DISCONNECTED);
             f.addAction(Intent.ACTION_BATTERY_CHANGED);
             registerReceiver(receiver, f);
+            setupCallListener();
             registered = true;
         }
         return START_STICKY;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void onDestroy() {
+        isRinging = false;
+        if (callRepeatRunnable != null) callHandler.removeCallbacks(callRepeatRunnable);
+        if (telephonyManager != null && phoneStateListener != null) {
+            try { telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE); } catch (Exception ignored) {}
+        }
         if (registered) {
             try { unregisterReceiver(receiver); } catch (Exception ignored) {}
             registered = false;

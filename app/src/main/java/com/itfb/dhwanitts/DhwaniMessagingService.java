@@ -37,6 +37,15 @@ public class DhwaniMessagingService extends FirebaseMessagingService {
 
         String id = "fcm_" + System.currentTimeMillis();
         NotificationHelper.addOrSaveToInbox(this, id, title, body, body, link);
+        getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE).edit()
+                .putString("cur_notif_id", id)
+                .putString("cur_notif_title", title)
+                .putString("cur_notif_short", body)
+                .putString("cur_notif_full", body)
+                .putString("cur_notif_link", link)
+                .putString("last_notif_id", id)
+                .putBoolean("notif_unread_" + id, true)
+                .apply();
         showSoftNotification(title, body, link);
     }
 
