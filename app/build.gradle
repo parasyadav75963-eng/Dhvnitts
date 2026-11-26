@@ -42,8 +42,7 @@ android {
             keyPassword "dhwani123"
         }
         release {
-            signingConfig signingConfigs.release
-            storeFile file("dhwani.keystore")
+storeFile file("dhwani.keystore")
             storePassword "dhwani123"
             keyAlias "dhwani"
             keyPassword "dhwani123"
@@ -59,6 +58,7 @@ android {
     }
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             signingConfig signingConfigs.permanentSign
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
