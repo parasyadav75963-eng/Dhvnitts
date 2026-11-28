@@ -120,6 +120,17 @@ public class AnnouncerEngine {
                 try {
                     SharedPreferences prefs = appCtx.getSharedPreferences("DhwaniTTS_Prefs", Context.MODE_PRIVATE);
                     String key = (voiceKey != null && !voiceKey.isEmpty()) ? voiceKey : prefs.getString("saved_voice_key", "");
+                    if (EloquenceBridge.isEloquenceKey(key)) {
+                        int rPct = Math.max(20, Math.min(400, prefs.getInt("speech_rate", 50) * 2));
+                        int pPct = Math.max(25, Math.min(200, prefs.getInt("pitch_rate", 50) * 2));
+                        String cleanText = PronunciationDictionary.apply(appCtx, text);
+                        byte[] pcm = EloquenceBridge.synthesizePcm(key, cleanText, rPct, pPct);
+                        if (pcm != null && pcm.length > 0) {
+                            playToneSync(toneIdx);
+                            playPcmSync(pcm, 22050, isCall);
+                        }
+                        return;
+                    }
                     File voicesDir = new File(appCtx.getFilesDir(), "voices");
                     File mFile = new File(voicesDir, key + ".onnx");
                     if (!mFile.exists()) {

@@ -54,10 +54,17 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
         File modelFile = new File(voicesDir, voice.getKey() + ".onnx");
         File configFile = new File(voicesDir, voice.getKey() + ".onnx.json");
 
-        boolean isDownloaded = modelFile.exists() && modelFile.length() > 1024 && configFile.exists();
+        boolean isBuiltIn = EloquenceBridge.isEloquenceKey(voice.getKey());
+        boolean isDownloaded = isBuiltIn || (modelFile.exists() && modelFile.length() > 1024 && configFile.exists());
         Integer prog = activeProgress.get(voice.getKey());
 
-        if (prog != null) {
+        if (isBuiltIn) {
+            holder.btnDownload.setVisibility(View.VISIBLE);
+            holder.btnDelete.setVisibility(View.GONE);
+            holder.btnDownload.setEnabled(false);
+            holder.btnDownload.setText("Built-in (Ready)");
+            if (holder.progressBar != null) holder.progressBar.setVisibility(View.GONE);
+        } else if (prog != null) {
             holder.btnDownload.setVisibility(View.VISIBLE);
             holder.btnDelete.setVisibility(View.GONE);
             holder.btnDownload.setEnabled(false);
@@ -79,7 +86,14 @@ public class VoiceAdapter extends RecyclerView.Adapter<VoiceAdapter.VoiceViewHol
         }
 
         holder.btnPreview.setOnClickListener(v -> {
-            if (modelFile.exists() && modelFile.length() > 1024 && configFile.exists()) {
+            if (isBuiltIn) {
+                Toast.makeText(context, "Playing Eloquence preview...", Toast.LENGTH_SHORT).show();
+                String previewText = VoiceLangHelper.getSampleTextForVoice(voice.getKey().replace(EloquenceBridge.KEY_PREFIX, ""));
+                executorService.execute(() -> {
+                    byte[] pcm = EloquenceBridge.synthesizePcm(voice.getKey(), previewText, 100, 100);
+                    if (pcm != null && pcm.length > 0) PiperAudioPlayer.playAudio(pcm, 22050);
+                });
+            } else if (modelFile.exists() && modelFile.length() > 1024 && configFile.exists()) {
                 Toast.makeText(context, "Playing preview...", Toast.LENGTH_SHORT).show();
                 String previewText = VoiceLangHelper.getSampleTextForVoice(voice.getKey().replace("__turbo","").replace("__crisp","").replace("__sonic",""));
                 VoiceLangHelper.tuneConfigForZeroStutter(configFile, voice.getKey().replace("__turbo","").replace("__crisp","").replace("__sonic",""));

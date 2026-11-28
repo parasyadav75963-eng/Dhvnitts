@@ -186,6 +186,10 @@ public class HomeFragment extends Fragment {
             }
         }
 
+        for (VoiceModel evv : EloquenceBridge.getBuiltInVoices()) {
+            allDownloadedVoices.add(evv);
+            if (!downloadedLanguages.contains(evv.getLanguageName())) downloadedLanguages.add(evv.getLanguageName());
+        }
         if (downloadedLanguages.isEmpty()) downloadedLanguages.add("Open Voice Library to download");
         spinnerLanguage.setAdapter(makeVisibleAdapter(downloadedLanguages));
     }
@@ -272,6 +276,18 @@ public class HomeFragment extends Fragment {
         final VoiceModel testVm = currentVoicesForLang.get(vPos);
         final float speed = Math.max(0.25f, seekbarSpeechRate.getProgress() / 50.0f);
         final float pitchFactor = 0.5f + (seekbarPitch.getProgress() / 100.0f);
+        if (EloquenceBridge.isEloquenceKey(testVm.getKey())) {
+            final int ratePct = Math.max(20, Math.min(400, seekbarSpeechRate.getProgress() * 2));
+            final int pitchPct = Math.max(25, Math.min(200, seekbarPitch.getProgress() * 2));
+            final Context appCtxEvv = requireContext().getApplicationContext();
+            Toast.makeText(getContext(), "Playing Eloquence Preview...", Toast.LENGTH_SHORT).show();
+            new Thread(() -> {
+                String sample = PronunciationDictionary.apply(appCtxEvv, VoiceLangHelper.getSampleTextForVoice(testVm.getKey().replace(EloquenceBridge.KEY_PREFIX, "")));
+                byte[] pcm = EloquenceBridge.synthesizePcm(testVm.getKey(), sample, ratePct, pitchPct);
+                if (pcm != null && pcm.length > 0) PiperAudioPlayer.playAudio(pcm, 22050);
+            }).start();
+            return;
+        }
         final int playRate = Math.max(8000, Math.min(48000, (int) (VoiceLangHelper.readSampleRate(new File(testVm.getConfigPath())) * pitchFactor)));
         final Context appCtx = requireContext().getApplicationContext();
 

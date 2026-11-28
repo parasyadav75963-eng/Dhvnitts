@@ -161,9 +161,9 @@ public class NotificationHelper {
             String title = top != null ? top.optString("title", "Dhwani TTS Update") : "Dhwani TTS Update";
             String shortMsg = top != null ? top.optString("short_msg", "") : "";
             boolean isUnread = top != null && top.optBoolean("unread", true);
-            banner.setText((isUnread ? "[UNREAD] " : "") + "🔔 " + title + ": " + shortMsg);
+            banner.setText((isUnread ? "[UNREAD] " : "") + "🔔 " + title + " — Tap to view notification");
             banner.setBackgroundColor(isUnread ? 0xFF1E3A8A : 0xFF1E293B);
-            banner.setContentDescription((isUnread ? "Unread Notification: " : "Notification: ") + title + ". " + shortMsg + ". Double tap to open.");
+            banner.setContentDescription((isUnread ? "Unread Notification: " : "Notification: ") + title + ". Double tap to view notification.");
             banner.setOnClickListener(v -> openInboxDialog(ctx, rootView));
         }
         container.addView(banner, 0);

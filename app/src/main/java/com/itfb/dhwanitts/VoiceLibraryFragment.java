@@ -79,6 +79,7 @@ public class VoiceLibraryFragment extends Fragment {
             modeOptions.add(MODE_SONIC);
             modeOptions.add(MODE_CRISP);
             modeOptions.add(MODE_TURBO);
+            modeOptions.add(EloquenceBridge.MODE_ELOQUENCE);
             modeAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_dropdown_item, modeOptions);
             modeSpinner.setAdapter(modeAdapter);
             filterBox.addView(modeSpinner);
@@ -129,9 +130,13 @@ public class VoiceLibraryFragment extends Fragment {
         voiceList.clear();
         for (VoiceModel vm : allVoicesMaster) {
             if (!selectedLang.startsWith("Installed Voices") && !vm.getEngineMode().equals(selectedMode)) continue;
-            File checkModel = new File(voicesDir, vm.getKey() + ".onnx");
-            File checkConfig = new File(voicesDir, vm.getKey() + ".onnx.json");
-            vm.setDownloaded(checkModel.exists() && checkConfig.exists() && checkModel.length() > 1024);
+            if (EloquenceBridge.isEloquenceKey(vm.getKey())) {
+                vm.setDownloaded(true);
+            } else {
+                File checkModel = new File(voicesDir, vm.getKey() + ".onnx");
+                File checkConfig = new File(voicesDir, vm.getKey() + ".onnx.json");
+                vm.setDownloaded(checkModel.exists() && checkConfig.exists() && checkModel.length() > 1024);
+            }
 
             if (selectedLang.startsWith("Installed Voices")) {
                 if (vm.isDownloaded()) voiceList.add(vm);
@@ -250,6 +255,10 @@ public class VoiceLibraryFragment extends Fragment {
                 uniqueLangs.add(langEnglish);
             }
 
+            for (VoiceModel evv : EloquenceBridge.getBuiltInVoices()) {
+                fetchedVoices.add(evv);
+                uniqueLangs.add(evv.getLanguageName());
+            }
             VoiceLangHelper.sortVoicesIndianFirst(fetchedVoices);
             mainHandler.post(() -> {
                 allVoicesMaster.clear();

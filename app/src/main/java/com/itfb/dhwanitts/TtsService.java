@@ -32,7 +32,7 @@ public class TtsService extends TextToSpeechService {
         try { AnnouncerService.sync(this); } catch (Exception ignored) {}
     }
 
-    @Override protected void onStop() { isStopped = true; }
+    @Override protected void onStop() { isStopped = true; EloquenceBridge.stop(); }
 
     private Locale getCleanLocaleForFilename(String f) {
         String l = f.toLowerCase(Locale.ROOT);
@@ -70,6 +70,7 @@ public class TtsService extends TextToSpeechService {
 
     @Override public int onIsValidVoiceName(String n) {
         if (TextUtils.isEmpty(n)) return TextToSpeech.ERROR;
+        if (EloquenceBridge.isEloquenceKey(n)) return TextToSpeech.SUCCESS;
         String p = resolveModelPath(n);
         if (!p.isEmpty() && new File(p).exists()) return TextToSpeech.SUCCESS;
         return !getInstalledModelFiles().isEmpty() ? TextToSpeech.SUCCESS : TextToSpeech.ERROR;
@@ -79,6 +80,7 @@ public class TtsService extends TextToSpeechService {
 
     @Override public String onGetDefaultVoiceNameFor(String l, String c, String v) {
         String sv = prefs != null ? prefs.getString("saved_voice_key", "") : "";
+        if (EloquenceBridge.isEloquenceKey(sv)) return sv;
         if (!sv.isEmpty() && !resolveModelPath(sv).isEmpty()) return sv;
         String iso = normalizeLangToIso2(l);
         for (File f : getInstalledModelFiles()) {
@@ -289,6 +291,21 @@ public class TtsService extends TextToSpeechService {
         NotificationHelper.checkInBackground(this);
         CharSequence cs = req.getCharSequenceText();
         if (TextUtils.isEmpty(cs)) { cb.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1); cb.done(); return; }
+        String savedKeyEvv = prefs != null ? prefs.getString("saved_voice_key", "") : "";
+        if (EloquenceBridge.isEloquenceKey(savedKeyEvv)) {
+            int ratePref = prefs != null ? prefs.getInt("speech_rate", 50) : 50;
+            int pitchPref = prefs != null ? prefs.getInt("pitch_rate", 50) : 50;
+            int sysRate = req.getSpeechRate();
+            boolean forceSpd = prefs != null && prefs.getBoolean("force_speech", false);
+            int ratePct = forceSpd ? Math.max(20, ratePref * 2) : (sysRate > 0 ? Math.max(20, Math.min(400, (sysRate * ratePref) / 50)) : Math.max(20, ratePref * 2));
+            int pitchPct = Math.max(25, Math.min(200, pitchPref * 2));
+            int numM = prefs != null ? prefs.getInt("num_pos", 0) : 0;
+            int puncM = prefs != null ? prefs.getInt("punc_pos", 0) : 0;
+            String normEvv = cleanAndNormalizeText(cs.toString(), numM, puncM);
+            EloquenceBridge.streamToCallback(savedKeyEvv, normEvv, ratePct, pitchPct, cb, () -> isStopped);
+            cb.done();
+            return;
+        }
         synchronized (PiperEngine.class) {
             String userDef = prefs != null ? resolveModelPath(prefs.getString("saved_voice_key", "")) : "";
             if (userDef.isEmpty() && prefs != null) userDef = resolveModelPath(prefs.getString("saved_model_path", ""));
@@ -356,6 +373,7 @@ public class TtsService extends TextToSpeechService {
         isStopped = true;
         if (priEng != null) { priEng.destroyEngine(); priMod = ""; }
         if (secEng != null) { secEng.destroyEngine(); secMod = ""; }
+        EloquenceBridge.release();
         super.onDestroy();
     }
 }
